@@ -1,0 +1,583 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client"
+  output        = "../generated/prisma"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum EventSpaceStatus {
+  ACTIVE
+  INACTIVE
+  UNDER_MAINTENANCE
+}
+
+enum SAPFRequestStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  RETURNED_FOR_REVISION
+  REJECTED
+  APPROVED
+  CANCELLED
+}
+
+enum ApprovalStepStatus {
+  PENDING
+  ACTIVE
+  APPROVED
+  RETURNED
+  REJECTED
+  SKIPPED
+}
+
+enum ApprovalActionType {
+  SUBMITTED
+  RESUBMITTED
+  APPROVED
+  RETURNED
+  REJECTED
+  COMMENTED
+  FINALIZED
+  CANCELLED
+}
+
+enum ApproverPosition {
+  ADVISER
+  DEAN
+  SDS
+  SAS
+  ADDITIONAL_SIGNATORY
+  VPAA_ASSISTANT
+  VPAA
+  UNIVERSITY_PRESIDENT
+}
+
+enum ConcernThreadStatus {
+  OPEN
+  RESOLVED
+}
+
+enum NotificationType {
+  REQUEST
+  APPROVAL
+  REVISION
+  REJECTION
+  CONFLICT
+  FINAL
+  COMMENT
+}
+
+enum SAPFChangeRequestType {
+  EDIT
+  CANCEL
+}
+
+enum SAPFChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum UserRole {
+  OFFICER
+  APPROVER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum TutorialProgressStatus {
+  STARTED
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailNotificationsEnabled Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  role       String?
+  banned     Boolean?  @default(false)
+  banReason  String?
+  banExpires DateTime?
+
+  sapfRequests       SAPFRequest[]          @relation("OfficerRequests")
+  assignedSteps      ApprovalStep[]         @relation("StepReviewer")
+  approvalActions    ApprovalAction[]       @relation("ActionActor")
+  approverPositions  ApproverPositionUser[]
+  sapfActivityLogs    SAPFActivityLog[]      @relation("SapfActivityActor")
+  sapfChangeRequests  SAPFChangeRequest[]    @relation("SapfChangeRequestRequester")
+  reviewedSapfChanges SAPFChangeRequest[]    @relation("SapfChangeRequestReviewer")
+  notifications      Notification[]
+  concernMessages    ConcernMessage[]       @relation("ConcernMessageAuthor")
+  officerThreads     ConcernThread[]        @relation("ConcernOfficer")
+  reviewerThreads    ConcernThread[]        @relation("ConcernReviewer")
+  createdVenueBlocks VenueBlock[]           @relation("VenueBlockCreator")
+  tutorialProgress   UserTutorialProgress[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model UserTutorialProgress {
+  id          String                 @id
+  userId      String
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        UserRole
+  status      TutorialProgressStatus @default(STARTED)
+  startedAt   DateTime               @default(now())
+  completedAt DateTime?
+  cancelledAt DateTime?
+  updatedAt   DateTime               @updatedAt
+
+  @@unique([userId, role])
+  @@index([status])
+  @@map("user_tutorial_progress")
+}
+
+model EventSpace {
+  id                String             @id
+  name              String
+  location          String
+  capacity          Int
+  description       String
+  amenities         Amenity[]
+  status            EventSpaceStatus   @default(ACTIVE)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  image             Bytes?
+  images            EventSpaceImage[]
+  sapfRequestVenues SAPFRequestVenue[]
+  venueBlocks       VenueBlock[]
+
+  @@map("event_space")
+}
+
+model EventSpaceImage {
+  id           String     @id
+  eventSpaceId String
+  eventSpace   EventSpace @relation(fields: [eventSpaceId], references: [id], onDelete: Cascade)
+  data         Bytes
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+
+  @@index([eventSpaceId])
+  @@map("event_space_image")
+}
+
+model Amenity {
+  id           String      @id
+  name         String
+  icon         String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  eventSpace   EventSpace? @relation(fields: [eventSpaceId], references: [id])
+  eventSpaceId String?
+
+  @@map("amenity")
+}
+
+model SAPFRequest {
+  id                          String            @id
+  requestNumber               String            @unique
+  submissionKey               String?           @unique
+  officerId                   String
+  officer                     User              @relation("OfficerRequests", fields: [officerId], references: [id], onDelete: Cascade)
+  title                       String
+  organization                String
+  departmentCategory          String?
+  department                  String
+  attendeeCount               String
+  status                      SAPFRequestStatus @default(DRAFT)
+  currentStepOrder            Int?
+  conflictWarning             Boolean           @default(false)
+  rejectionReason             String?
+  modality                    String?
+  programCourse               String?
+  venue                       String?
+  setting                     String?
+  offCampAgree                String?
+  personnelInCharge           String?
+  activityType                String?
+  attire                      String?
+  scope                       String?
+  program                     String?
+  rationale                   String?
+  objectives                  String?
+  programFlow                 String?
+  emergencyPlan               String?
+  budget                      String?
+  sourceOfBudget              String?
+  budgetDetails               String?
+  vehiclePassengers           String?
+  foodPax                     String?
+  roomVenueDetails            String?
+  microphoneQty               String?
+  extraProvisions             String?
+  otherSupport                String?
+  otherDetails                String?
+  parentsConsent              Boolean?
+  hasAttachments              Boolean?
+  academicInterruption        Boolean?
+  academicInterruptionRemarks String?
+  medicalExam                 Boolean?
+  reportOfCompliance          Boolean?
+  studentPersonnelRatio       String?
+  conductedRemarks            String?
+  cancelledRemarks            String?
+  verificationToken           String?           @unique
+  approvedAt                  DateTime?
+  createdAt                   DateTime          @default(now())
+  updatedAt                   DateTime          @updatedAt
+
+  coreValues         SAPFCoreValue[]
+  graduateAttributes SAPFGraduateAttribute[]
+  supportRequests    SAPFSupportRequest[]
+  schedules          SAPFRequestSchedule[]
+  venues             SAPFRequestVenue[]
+  attachments        SAPFAttachment[]
+  approvalSteps      ApprovalStep[]
+  approvalActions    ApprovalAction[]
+  activityLogs       SAPFActivityLog[]
+  changeRequests     SAPFChangeRequest[]
+  notifications      Notification[]
+  concernThreads     ConcernThread[]
+
+  @@index([officerId])
+  @@index([status])
+  @@map("sapf_request")
+}
+
+model SAPFRequestSchedule {
+  id        String      @id
+  requestId String
+  request   SAPFRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  startAt   DateTime
+  endAt     DateTime
+  createdAt DateTime    @default(now())
+
+  @@index([requestId])
+  @@index([startAt])
+  @@map("sapf_request_schedule")
+}
+
+model SAPFRequestVenue {
+  id           String      @id
+  requestId    String
+  request      SAPFRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  eventSpaceId String
+  eventSpace   EventSpace  @relation(fields: [eventSpaceId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+
+  @@unique([requestId, eventSpaceId])
+  @@index([eventSpaceId])
+  @@map("sapf_request_venue")
+}
+
+model SAPFAttachment {
+  id        String      @id
+  requestId String
+  request   SAPFRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  fileName  String
+  mimeType  String
+  size      Int
+  data      Bytes
+  purpose   String      @default("SDS_CLEARANCE")
+  createdAt DateTime    @default(now())
+
+  @@index([requestId])
+  @@index([purpose])
+  @@map("sapf_attachment")
+}
+
+model SAPFCoreValue {
+  id        String      @id
+  requestId String
+  request   SAPFRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  value     String
+  createdAt DateTime    @default(now())
+
+  @@unique([requestId, value])
+  @@index([requestId])
+  @@map("sapf_core_value")
+}
+
+model SAPFGraduateAttribute {
+  id        String      @id
+  requestId String
+  request   SAPFRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  value     String
+  createdAt DateTime    @default(now())
+
+  @@unique([requestId, value])
+  @@index([requestId])
+  @@map("sapf_graduate_attribute")
+}
+
+model SAPFSupportRequest {
+  id        String      @id
+  requestId String
+  request   SAPFRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  value     String
+  createdAt DateTime    @default(now())
+
+  @@unique([requestId, value])
+  @@index([requestId])
+  @@map("sapf_support_request")
+}
+
+model ApprovalStep {
+  id         String             @id
+  requestId  String
+  request    SAPFRequest        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  stepOrder  Int
+  position   ApproverPosition
+  label      String
+  reviewerId String
+  reviewer   User               @relation("StepReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  status     ApprovalStepStatus @default(PENDING)
+  comment    String?
+  actedAt    DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  actions       ApprovalAction[]
+  concernThread ConcernThread?
+
+  @@unique([requestId, stepOrder])
+  @@index([reviewerId])
+  @@index([status])
+  @@map("approval_step")
+}
+
+model ApprovalAction {
+  id        String             @id
+  requestId String
+  request   SAPFRequest        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  stepId    String?
+  step      ApprovalStep?      @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  actorId   String
+  actor     User               @relation("ActionActor", fields: [actorId], references: [id], onDelete: Cascade)
+  action    ApprovalActionType
+  comment   String?
+  createdAt DateTime           @default(now())
+
+  @@index([requestId])
+  @@index([actorId])
+  @@map("approval_action")
+}
+
+model SAPFActivityLog {
+  id          String      @id
+  requestId   String
+  request     SAPFRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?       @relation("SapfActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action      String
+  title       String
+  description String?
+  metadata    String?
+  createdAt   DateTime    @default(now())
+
+  @@index([requestId])
+  @@index([actorId])
+  @@index([action])
+  @@map("sapf_activity_log")
+}
+
+model SAPFChangeRequest {
+  id                String                  @id
+  requestId         String
+  request           SAPFRequest             @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestedById     String
+  requestedBy       User                    @relation("SapfChangeRequestRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewedById      String?
+  reviewedBy        User?                   @relation("SapfChangeRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  type              SAPFChangeRequestType
+  status            SAPFChangeRequestStatus @default(PENDING)
+  reason            String
+  resolutionComment String?
+  createdAt         DateTime                @default(now())
+  reviewedAt        DateTime?
+
+  @@index([requestId])
+  @@index([requestedById])
+  @@index([reviewedById])
+  @@index([status])
+  @@map("sapf_change_request")
+}
+
+model ApproverPositionUser {
+  id        String           @id
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position  ApproverPosition
+  active    Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([userId, position])
+  @@index([position])
+  @@map("approver_position_user")
+}
+
+model VenueBlock {
+  id           String      @id
+  eventSpaceId String?
+  eventSpace   EventSpace? @relation(fields: [eventSpaceId], references: [id], onDelete: Cascade)
+  title        String
+  reason       String?
+  createdById  String?
+  createdBy    User?       @relation("VenueBlockCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  schedules    VenueBlockSchedule[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([eventSpaceId])
+  @@map("venue_block")
+}
+
+model VenueBlockSchedule {
+  id           String     @id
+  venueBlockId String
+  venueBlock   VenueBlock @relation(fields: [venueBlockId], references: [id], onDelete: Cascade)
+  startAt      DateTime
+  endAt        DateTime
+  createdAt    DateTime   @default(now())
+
+  @@index([venueBlockId])
+  @@index([startAt])
+  @@map("venue_block_schedule")
+}
+
+model Notification {
+  id        String           @id
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId String?
+  request   SAPFRequest?     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  type      NotificationType @default(REQUEST)
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([requestId])
+  @@map("notification")
+}
+
+model ConcernThread {
+  id             String              @id
+  requestId      String
+  request        SAPFRequest         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  approvalStepId String              @unique
+  approvalStep   ApprovalStep        @relation(fields: [approvalStepId], references: [id], onDelete: Cascade)
+  officerId      String
+  officer        User                @relation("ConcernOfficer", fields: [officerId], references: [id], onDelete: Cascade)
+  reviewerId     String
+  reviewer       User                @relation("ConcernReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  status         ConcernThreadStatus @default(OPEN)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  messages ConcernMessage[]
+
+  @@index([requestId])
+  @@index([officerId])
+  @@index([reviewerId])
+  @@map("concern_thread")
+}
+
+model ConcernMessage {
+  id        String        @id
+  threadId  String
+  thread    ConcernThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User          @relation("ConcernMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  readAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([threadId])
+  @@index([authorId])
+  @@map("concern_message")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  impersonatedBy String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  title                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model SystemSettings {
+  id          String   @id @default("SYSTEM")
+  smtpHost    String   @default("smtp.gmail.com")
+  smtpPort    Int      @default(465)
+  smtpUser    String   @default("")
+  smtpPass    String   @default("")
+  senderEmail String   @default("")
+  senderName  String   @default("Zerve")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
