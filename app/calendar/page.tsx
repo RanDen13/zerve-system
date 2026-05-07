@@ -7,9 +7,9 @@ import Image from "next/image";
 const page = async ({
   searchParams,
 }: {
-  searchParams: Promise<{ kiosk?: string }>;
+  searchParams: Promise<{ kiosk?: string; date?: string }>;
 }) => {
-  const { kiosk } = await searchParams;
+  const { kiosk, date } = await searchParams;
   const isKiosk = kiosk === "true";
   const [session, calendarData] = await Promise.all([
     auth.api.getSession({
@@ -41,6 +41,7 @@ const page = async ({
           backHref={!isKiosk ? "/" : undefined}
           backLabel="Back"
           kiosk={isKiosk}
+          initialDate={date}
         />
       </div>
     </main>

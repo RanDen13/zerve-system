@@ -51,6 +51,10 @@ import {
   SUPPORT_REQUEST_OPTIONS,
 } from "./sapfData";
 import {
+  equipmentFieldForSupportLabel,
+  parseEquipmentQuantity,
+} from "./sapfEquipment";
+import {
   addSapfCalendarDays,
   formatSapfDateForMessage,
   formatSapfDateInputValue,
@@ -58,7 +62,7 @@ import {
   startOfSapfDay,
 } from "./sapfSchedule";
 
-const MIN_BOOKING_ADVANCE_DAYS = 30;
+const DEFAULT_BOOKING_ADVANCE_DAYS = 30;
 const MAX_PROGRAM_FLOW_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const REQUIRED_CHAIN_POSITIONS = [
   "DEAN",
@@ -74,6 +78,22 @@ type ScheduleRow = {
   date: string;
   startTime: string;
   endTime: string;
+};
+
+type EquipmentCatalogItem = {
+  id: string;
+  name: string;
+  supportLabel?: string | null;
+  totalQuantity: number;
+  active: boolean;
+  allocations?: Array<{
+    requestId: string;
+    quantity: number;
+    schedules?: Array<{
+      startAt: string | Date;
+      endAt: string | Date;
+    }>;
+  }>;
 };
 
 const PROGRAM_OPTIONS = [
@@ -173,6 +193,37 @@ function nextScheduleDate(baseDate: string, existingDates: Set<string>) {
   return nextDate;
 }
 
+function localDateTime(date: string, time: string) {
+  if (!date || !time) return null;
+  const parsed = new Date(`${date}T${time}:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function scheduleRangesFromRows(rows: ScheduleRow[]) {
+  return rows
+    .map((row) => {
+      const startAt = localDateTime(row.date, row.startTime);
+      const endAt = localDateTime(row.date, row.endTime);
+      if (!startAt || !endAt) return null;
+      return { startAt, endAt };
+    })
+    .filter(Boolean) as Array<{ startAt: Date; endAt: Date }>;
+}
+
+function rangesOverlap(
+  ranges: Array<{ startAt: Date; endAt: Date }>,
+  schedules: Array<{ startAt: string | Date; endAt: string | Date }>,
+) {
+  if (!ranges.length) return false;
+  return ranges.some((range) =>
+    schedules.some((schedule) => {
+      const startAt = new Date(schedule.startAt);
+      const endAt = new Date(schedule.endAt);
+      return startAt < range.endAt && endAt > range.startAt;
+    }),
+  );
+}
+
 function getRequestScheduleRows(initialRequest?: any): ScheduleRow[] {
   if (!initialRequest) {
     return [createScheduleRow()];
@@ -204,12 +255,14 @@ function selectedVenueIdsFromRequest(initialRequest?: any) {
 export default function SapfBookingForm({
   venues,
   approvers,
+  equipmentItems = [],
   initialRequest,
   editorMode = "officer",
   preselectedVenueIds = [],
 }: {
   venues: EventSpaceData[];
   approvers: Record<string, any[]>;
+  equipmentItems?: EquipmentCatalogItem[];
   initialRequest?: any;
   editorMode?: "officer" | "sds";
   preselectedVenueIds?: string[];
@@ -354,6 +407,48 @@ export default function SapfBookingForm({
   const selectedVenues = activeVenues.filter((venue) =>
     selectedVenueIds.includes(venue.id),
   );
+  const scheduleRanges = useMemo(
+    () => scheduleRangesFromRows(scheduleRows),
+    [scheduleRows],
+  );
+  const equipmentBySupport = useMemo(() => {
+    const mapped = new Map<string, EquipmentCatalogItem>();
+    equipmentItems.forEach((item) => {
+      if (item.supportLabel) mapped.set(item.supportLabel, item);
+    });
+    return mapped;
+  }, [equipmentItems]);
+  const supportOptions = useMemo(
+    () => [
+      ...SUPPORT_REQUEST_OPTIONS,
+      ...equipmentItems
+        .map((item) => item.supportLabel)
+        .filter(
+          (label): label is string =>
+            Boolean(label) && !SUPPORT_REQUEST_OPTIONS.includes(label as any),
+        ),
+    ],
+    [equipmentItems],
+  );
+  const equipmentAvailabilityBySupport = useMemo(() => {
+    const mapped = new Map<
+      string,
+      { item: EquipmentCatalogItem; used: number; available: number }
+    >();
+    equipmentBySupport.forEach((item, supportLabel) => {
+      const used = (item.allocations || [])
+        .filter((allocation) =>
+          rangesOverlap(scheduleRanges, allocation.schedules || []),
+        )
+        .reduce((sum, allocation) => sum + allocation.quantity, 0);
+      mapped.set(supportLabel, {
+        item,
+        used,
+        available: Math.max(0, Number(item.totalQuantity || 0) - used),
+      });
+    });
+    return mapped;
+  }, [equipmentBySupport, scheduleRanges]);
   const venueSearchValue = venueSearch.trim().toLowerCase();
   const filteredVenues = activeVenues.filter((venue) => {
     if (!venueSearchValue) return true;
@@ -369,14 +464,28 @@ export default function SapfBookingForm({
         : `${selectedVenues.length} venues selected`;
   const programFlowAttachmentLimitExceeded =
     programFlowAttachmentTotal > MAX_PROGRAM_FLOW_ATTACHMENT_BYTES;
-  const earliestBookingDate = useMemo(
-    () => addSapfCalendarDays(startOfSapfDay(), MIN_BOOKING_ADVANCE_DAYS),
-    [],
+  const bookingAdvanceDays = selectedVenues.length
+    ? selectedVenues.reduce(
+        (max, venue: any) =>
+          Math.max(
+            max,
+            Number(venue.bookingAdvanceDays ?? DEFAULT_BOOKING_ADVANCE_DAYS),
+          ),
+        0,
+      )
+    : DEFAULT_BOOKING_ADVANCE_DAYS;
+  const earliestBookingDate = addSapfCalendarDays(
+    startOfSapfDay(),
+    bookingAdvanceDays,
   );
   const minimumBookingDate = formatSapfDateInputValue(earliestBookingDate);
   const earliestBookingDateLabel = formatSapfDateForMessage(
     earliestBookingDate,
   );
+  const bookingAdvanceLabel =
+    bookingAdvanceDays > 0
+      ? `${bookingAdvanceDays} day${bookingAdvanceDays === 1 ? "" : "s"} in advance`
+      : "immediately";
   const adviserOptions = approvers.ADVISER || [];
   const additionalSignatoryOptions = approvers.ADDITIONAL_SIGNATORY || [];
   const selectedAdviser = adviserOptions.find(
@@ -529,7 +638,9 @@ export default function SapfBookingForm({
 
       if (dates[index] < minimumBookingDate) {
         popup.showError(
-          `Reservations must be booked at least ${MIN_BOOKING_ADVANCE_DAYS} days in advance.`,
+          bookingAdvanceDays > 0
+            ? `Reservations for selected venue(s) must be booked at least ${bookingAdvanceDays} days in advance.`
+            : "Reservations for selected venue(s) can be booked immediately, but not before today.",
         );
         return;
       }
@@ -560,6 +671,28 @@ export default function SapfBookingForm({
         )}.`,
       );
       return;
+    }
+
+    for (const supportValue of selectedSupportValues) {
+      const availability = equipmentAvailabilityBySupport.get(supportValue);
+      const fieldInfo = equipmentFieldForSupportLabel(supportValue);
+      if (!availability || !fieldInfo) continue;
+
+      const requested = parseEquipmentQuantity(formData.get(fieldInfo.quantityField));
+      if (requested <= 0) {
+        popup.showError(`Enter a quantity for ${supportValue}.`);
+        return;
+      }
+      if (!availability.item.active || availability.available <= 0) {
+        popup.showError(`${supportValue} is not available for this schedule.`);
+        return;
+      }
+      if (requested > availability.available) {
+        popup.showError(
+          `${supportValue} has only ${availability.available} available for this schedule.`,
+        );
+        return;
+      }
     }
 
     const selectedVenueNames = selectedVenues.map((venue) => venue.name);
@@ -730,14 +863,14 @@ export default function SapfBookingForm({
             Schedule
           </CardTitle>
           <CardDescription>
-            Select a venue schedule at least 30 days in advance.
+            Selected venue policy: book {bookingAdvanceLabel}.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-start gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-900 dark:text-blue-100 md:col-span-3">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             <p>
-              Reservations can only be booked at least 30 days in advance.
+              Selected venue(s) can be booked {bookingAdvanceLabel}.
               Earliest available date: {earliestBookingDateLabel}.
             </p>
           </div>
@@ -1182,8 +1315,12 @@ export default function SapfBookingForm({
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
-            {SUPPORT_REQUEST_OPTIONS.map((value) => {
+            {supportOptions.map((value) => {
               const detailField = supportDetailFields[value];
+              const equipmentInfo = equipmentAvailabilityBySupport.get(value);
+              const equipmentUnavailable =
+                Boolean(equipmentInfo) &&
+                (!equipmentInfo?.item.active || equipmentInfo.available <= 0);
               const checked = selectedSupportValues.includes(value);
               const optionId = `support-${value
                 .toLowerCase()
@@ -1205,6 +1342,7 @@ export default function SapfBookingForm({
                       name="supportRequests"
                       value={value}
                       checked={checked}
+                      disabled={equipmentUnavailable && !checked}
                       onChange={(event: ChangeEvent<HTMLInputElement>) =>
                         toggleSupportRequest(value, event.target.checked)
                       }
@@ -1213,7 +1351,17 @@ export default function SapfBookingForm({
                     <label htmlFor={optionId} className="cursor-pointer">
                       {value}
                     </label>
+                    {equipmentInfo && (
+                      <span className="ml-auto rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-700 dark:text-sky-200">
+                        {equipmentInfo.available} left
+                      </span>
+                    )}
                   </span>
+                  {equipmentUnavailable && !checked ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Not available for selected schedule.
+                    </p>
+                  ) : null}
                   {detailField && checked ? (
                     <div className="mt-3 border-t pt-3">
                       <Label
@@ -1234,10 +1382,19 @@ export default function SapfBookingForm({
                         <Input
                           id={detailField.name}
                           name={detailField.name}
+                          type={equipmentInfo ? "number" : "text"}
+                          min={equipmentInfo ? 1 : undefined}
+                          max={equipmentInfo ? equipmentInfo.available : undefined}
                           placeholder={detailField.placeholder}
                           defaultValue={detailField.defaultValue}
                           className="mt-2"
                         />
+                      )}
+                      {equipmentInfo && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {equipmentInfo.available} available from{" "}
+                          {equipmentInfo.item.totalQuantity} total.
+                        </p>
                       )}
                     </div>
                   ) : null}

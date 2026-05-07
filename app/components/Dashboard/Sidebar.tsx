@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PackageCheck,
   Settings,
   Users,
   X,
@@ -21,7 +22,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-type AppRole = "OFFICER" | "APPROVER" | "ADMIN" | "SUPER_ADMIN";
+type AppRole =
+  | "OFFICER"
+  | "APPROVER"
+  | "ADMIN"
+  | "SUPER_ADMIN"
+  | "EQUIPMENT_PROVISIONER";
 
 interface SidebarProps {
   userRole: AppRole;
@@ -61,9 +67,16 @@ const navItems: NavItem[] = [
     roles: ["OFFICER", "APPROVER", "ADMIN", "SUPER_ADMIN"],
   },
   {
+    label: "Equipment",
+    href: "/user/equipment",
+    icon: <PackageCheck className="h-5 w-5" />,
+    roles: ["EQUIPMENT_PROVISIONER", "ADMIN", "SUPER_ADMIN"],
+  },
+  {
     label: "Venues",
     href: "/user/spaces",
     icon: <Building2 className="h-5 w-5" />,
+    roles: ["OFFICER", "APPROVER", "ADMIN", "SUPER_ADMIN"],
   },
   {
     label: "Settings",
@@ -76,6 +89,7 @@ const navTourTargets: Record<string, string> = {
   "/user/dashboard": "nav-dashboard",
   "/user/bookings": "nav-bookings",
   "/user/calendar": "nav-calendar",
+  "/user/equipment": "nav-equipment",
   "/user/spaces": "nav-spaces",
   "/user/settings": "nav-settings",
 };

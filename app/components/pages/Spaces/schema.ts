@@ -41,6 +41,10 @@ export const createEventSpaceSchema = z.object({
     .min(3, "Location must be at least 3 characters")
     .max(200, "Location must be less than 200 characters"),
   capacity: z.coerce.number().min(1, "Capacity must be at least 1"),
+  bookingAdvanceDays: z.coerce
+    .number()
+    .min(0, "Advance days must be 0 or higher")
+    .default(30),
   description: z
     .string()
     .max(500, "Description must be less than 500 characters"),
@@ -65,6 +69,10 @@ export const updateEventSpaceSchema = z.object({
     .max(200, "Location must be less than 200 characters")
     .optional(),
   capacity: z.coerce.number().min(1, "Capacity must be at least 1").optional(),
+  bookingAdvanceDays: z.coerce
+    .number()
+    .min(0, "Advance days must be 0 or higher")
+    .optional(),
   description: z
     .string()
     .max(500, "Description must be less than 500 characters")

@@ -56,6 +56,34 @@ async function main() {
 
   const [wifi, projector, sound, stage, air, chairs] = amenities;
 
+  await Promise.all(
+    [
+      ["eq_sound_system", "Sound System", "Sound System", 1],
+      ["eq_microphone", "Microphone", "Microphone", 10],
+      ["eq_lcd_projector", "LCD Projector", "LCD Projector", 3],
+      ["eq_long_table", "Long Table", "One Long Table", 20],
+      ["eq_chairs", "Chairs", "Chairs", 100],
+    ].map(([id, name, supportLabel, totalQuantity]) =>
+      prisma.equipmentItem.upsert({
+        where: { id: String(id) },
+        update: {
+          name: String(name),
+          supportLabel: String(supportLabel),
+          totalQuantity: Number(totalQuantity),
+          active: true,
+        },
+        create: {
+          id: String(id),
+          name: String(name),
+          supportLabel: String(supportLabel),
+          totalQuantity: Number(totalQuantity),
+          active: true,
+          createdById: superAdmin.id,
+        },
+      }),
+    ),
+  );
+
   await prisma.eventSpace.upsert({
     where: { id: "venue-auditorium" },
     update: {},

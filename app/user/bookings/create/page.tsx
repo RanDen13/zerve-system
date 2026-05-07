@@ -3,6 +3,7 @@ import {
   getApproverOptions,
   getSapfRequestById,
 } from "@/app/components/pages/SAPF/SapfActions";
+import { getEquipmentCatalogForBooking } from "@/app/components/pages/SAPF/EquipmentActions";
 import { getAllEventSpaces } from "@/app/components/pages/Spaces/EventSpaceActions";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -100,10 +101,11 @@ const page = async ({
     return <ErrorCard message="Only officers can create bookings." />;
   }
 
-  const [venuesResult, approversResult, requestResult] = await Promise.all([
+  const [venuesResult, approversResult, requestResult, equipmentResult] = await Promise.all([
     getAllEventSpaces(),
     getApproverOptions(),
     requestId ? getSapfRequestById(requestId) : Promise.resolve(null),
+    getEquipmentCatalogForBooking(requestId),
   ]);
 
   if (!venuesResult.success) {
@@ -122,6 +124,14 @@ const page = async ({
     return (
       <ErrorCard
         message={requestResult.message || "Failed to load request."}
+      />
+    );
+  }
+
+  if (!equipmentResult.success) {
+    return (
+      <ErrorCard
+        message={equipmentResult.message || "Failed to load equipment."}
       />
     );
   }
@@ -162,6 +172,7 @@ const page = async ({
       <SapfBookingForm
         venues={venuesResult.data || []}
         approvers={approversResult.data || {}}
+        equipmentItems={equipmentResult.data || []}
         initialRequest={request}
         editorMode={role === "OFFICER" ? "officer" : "sds"}
         preselectedVenueIds={venueId ? [venueId] : []}

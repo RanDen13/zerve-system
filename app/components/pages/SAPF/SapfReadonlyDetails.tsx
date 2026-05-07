@@ -21,6 +21,7 @@ import {
   GRADUATE_ATTRIBUTE_OPTIONS,
   SUPPORT_REQUEST_OPTIONS,
 } from "./sapfData";
+import { equipmentStatusLabel } from "./sapfEquipment";
 import {
   formatSapfDateInputValue,
   formatSapfDateTime,
@@ -254,6 +255,9 @@ export default function SapfReadonlyDetails({
     </div>
   );
   const schedules = Array.isArray(request.schedules) ? request.schedules : [];
+  const equipmentRequests = Array.isArray(request.equipmentRequests)
+    ? request.equipmentRequests
+    : [];
 
   return (
     <MotionList className="space-y-6">
@@ -355,6 +359,41 @@ export default function SapfReadonlyDetails({
             options={GRADUATE_ATTRIBUTE_OPTIONS}
             selected={part1.graduateAttributes}
           />
+          {equipmentRequests.length > 0 && (
+            <div className="md:col-span-2">
+              <p className="text-sm font-medium text-muted-foreground">
+                Equipment Provisioning
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {equipmentRequests.map((item: any) => (
+                  <div
+                    key={item.id}
+                    className="rounded-md border bg-muted px-3 py-2 text-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-semibold">
+                        {item.equipmentItem?.name || "Equipment"} x{" "}
+                        {item.quantity}
+                      </span>
+                      <Badge variant="outline">
+                        {equipmentStatusLabel(item.status)}
+                      </Badge>
+                    </div>
+                    {item.providedAt && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Provided by {item.providedBy?.name || "Provisioner"}
+                      </p>
+                    )}
+                    {item.returnedAt && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Returned by {item.returnedBy?.name || "Provisioner"}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <ReadOnlyLongField
             label="Program Flow"
             value={part1.programFlow}

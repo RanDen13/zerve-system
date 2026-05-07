@@ -42,6 +42,7 @@ export default function EventSpaceCard({
     amenities = [],
     images = [],
   } = eventSpace;
+  const bookingAdvanceDays = Number((eventSpace as any).bookingAdvanceDays ?? 30);
   const [showEditPopup, setShowEditPopup] = useState<boolean>(false);
   const statusPopup = usePopup();
   const router = useRouter();
@@ -126,12 +127,14 @@ export default function EventSpaceCard({
                 <Users className="w-4 h-4 text-sky-600" />
                 <span>Capacity: {capacity} people</span>
               </div>
-              {showAdminActions && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="w-4 h-4 text-sky-600" />
-                  <span>Managed by super admin</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="w-4 h-4 text-sky-600" />
+                <span>
+                  {bookingAdvanceDays > 0
+                    ? `${bookingAdvanceDays} day advance booking`
+                    : "Immediate booking"}
+                </span>
+              </div>
             </div>
 
             {/* Amenities */}

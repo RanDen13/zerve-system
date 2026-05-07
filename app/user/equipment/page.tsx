@@ -1,4 +1,4 @@
-import SapfDashboard from "@/app/components/pages/SAPF/SapfDashboard";
+import EquipmentProvisioningPage from "@/app/components/pages/SAPF/EquipmentProvisioningPage";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -12,11 +12,12 @@ const page = async () => {
     redirect("/login");
   }
 
-  if (session.user.role?.toUpperCase() === "EQUIPMENT_PROVISIONER") {
-    redirect("/user/equipment");
+  const role = session.user.role?.toUpperCase();
+  if (!["EQUIPMENT_PROVISIONER", "ADMIN", "SUPER_ADMIN"].includes(role || "")) {
+    redirect("/user/dashboard");
   }
 
-  return <SapfDashboard />;
+  return <EquipmentProvisioningPage />;
 };
 
 export default page;

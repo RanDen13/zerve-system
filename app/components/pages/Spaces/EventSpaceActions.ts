@@ -16,6 +16,10 @@ import {
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGE_COUNT = 8;
+const IMAGE_TRANSACTION_OPTIONS = {
+  maxWait: 10_000,
+  timeout: 30_000,
+};
 
 function extractImageFiles(data: FormData) {
   return data
@@ -66,7 +70,6 @@ export async function getAllEventSpaces(): Promise<
         amenities: true,
         images: {
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-          take: 1,
         },
       },
     });
@@ -176,6 +179,7 @@ export async function getEventSpaceById(
                   requestNumber: true,
                   title: true,
                   organization: true,
+                  setting: true,
                   status: true,
                   schedules: {
                     select: {
@@ -341,36 +345,39 @@ export async function createEventSpace(
       imageFiles.map(async (file) => Buffer.from(await file.arrayBuffer())),
     );
 
-    const newSpace = await prisma.$transaction(async (tx) => {
-      const created = await tx.eventSpace.create({
-        data: {
-          id: uuid(),
-          ...restData,
-          image: imageBuffers[0] || undefined,
-          amenities: amenities
-            ? {
-                connect: amenities.map((id: string) => ({ id })),
-              }
-            : undefined,
-        },
-        include: {
-          amenities: true,
-        },
-      });
-
-      if (imageBuffers.length > 0) {
-        await tx.eventSpaceImage.createMany({
-          data: imageBuffers.map((buffer, index) => ({
+    const newSpace = await prisma.$transaction(
+      async (tx) => {
+        const created = await tx.eventSpace.create({
+          data: {
             id: uuid(),
-            eventSpaceId: created.id,
-            data: buffer,
-            sortOrder: index,
-          })),
+            ...restData,
+            image: imageBuffers[0] || undefined,
+            amenities: amenities
+              ? {
+                  connect: amenities.map((id: string) => ({ id })),
+                }
+              : undefined,
+          },
+          include: {
+            amenities: true,
+          },
         });
-      }
 
-      return created;
-    });
+        if (imageBuffers.length > 0) {
+          await tx.eventSpaceImage.createMany({
+            data: imageBuffers.map((buffer, index) => ({
+              id: uuid(),
+              eventSpaceId: created.id,
+              data: buffer,
+              sortOrder: index,
+            })),
+          });
+        }
+
+        return created;
+      },
+      IMAGE_TRANSACTION_OPTIONS,
+    );
 
     return {
       success: true,
@@ -428,6 +435,14 @@ export async function updateEventSpace(
     const imageBuffers = await Promise.all(
       imageFiles.map(async (file) => Buffer.from(await file.arrayBuffer())),
     );
+    const replaceImages = data.get("replaceImages") === "true";
+    const keepImageIds: Set<string> | null = replaceImages
+      ? new Set<string>(
+          JSON.parse(String(data.get("keepImageIds") || "[]")).filter(
+            (imageId: unknown): imageId is string => typeof imageId === "string",
+          ),
+        )
+      : null;
 
     // Parse amenities from JSON string if present
     const amenitiesData = data.get("amenities");
@@ -443,33 +458,55 @@ export async function updateEventSpace(
         }
       : undefined;
 
-    await prisma.$transaction(async (tx) => {
-      if (imageBuffers.length > 0) {
-        await tx.eventSpaceImage.deleteMany({
-          where: { eventSpaceId: id },
-        });
-        await tx.eventSpaceImage.createMany({
-          data: imageBuffers.map((buffer, index) => ({
-            id: uuid(),
-            eventSpaceId: id,
-            data: buffer,
-            sortOrder: index,
-          })),
-        });
-      }
+    await prisma.$transaction(
+      async (tx) => {
+        if (replaceImages) {
+          await tx.eventSpaceImage.deleteMany({
+            where: {
+              eventSpaceId: id,
+              ...(keepImageIds?.size
+                ? { id: { notIn: Array.from(keepImageIds) } }
+                : {}),
+            },
+          });
+        }
 
-      await tx.eventSpace.update({
-        where: { id },
-        data: {
-          ...updateData,
-          ...(amenitiesUpdate && { amenities: amenitiesUpdate }),
-          ...(imageBuffers.length > 0 ? { image: imageBuffers[0] } : {}),
-        },
-        include: {
-          amenities: true,
-        },
-      });
-    });
+        if (imageBuffers.length > 0) {
+          await tx.eventSpaceImage.createMany({
+            data: imageBuffers.map((buffer, index) => ({
+              id: uuid(),
+              eventSpaceId: id,
+              data: buffer,
+              sortOrder: index,
+            })),
+          });
+        }
+
+        const primaryImage =
+          replaceImages || imageBuffers.length > 0
+            ? await tx.eventSpaceImage.findFirst({
+                where: { eventSpaceId: id },
+                orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+                select: { data: true },
+              })
+            : null;
+
+        await tx.eventSpace.update({
+          where: { id },
+          data: {
+            ...updateData,
+            ...(amenitiesUpdate && { amenities: amenitiesUpdate }),
+            ...(replaceImages || imageBuffers.length > 0
+              ? { image: primaryImage?.data ?? null }
+              : {}),
+          },
+          include: {
+            amenities: true,
+          },
+        });
+      },
+      IMAGE_TRANSACTION_OPTIONS,
+    );
 
     return {
       success: true,

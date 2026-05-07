@@ -42,7 +42,13 @@ type SystemSettingsData = {
   senderName: string;
 };
 
-type AppRole = "OFFICER" | "APPROVER" | "ADMIN" | "SUPER_ADMIN" | string;
+type AppRole =
+  | "OFFICER"
+  | "APPROVER"
+  | "ADMIN"
+  | "SUPER_ADMIN"
+  | "EQUIPMENT_PROVISIONER"
+  | string;
 
 export default function SystemSettingsPage({
   initialSettings,

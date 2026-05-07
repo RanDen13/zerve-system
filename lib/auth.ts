@@ -144,11 +144,6 @@ export const auth = betterAuth({
     resetPasswordTokenExpiresIn: 60 * 60,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, token }) => {
-      const resetUser = user as typeof user & { role?: string | null };
-      if (resetUser.role?.toUpperCase() === "SUPER_ADMIN") {
-        return;
-      }
-
       const resetUrl = new URL("/reset-password", appUrl);
       resetUrl.searchParams.set("token", token);
       const html = authEmailLayout({
@@ -203,6 +198,7 @@ export const auth = betterAuth({
         OFFICER: userAc,
         APPROVER: userAc,
         ADMIN: userAc,
+        EQUIPMENT_PROVISIONER: userAc,
         SUPER_ADMIN: adminAc,
       },
     }),

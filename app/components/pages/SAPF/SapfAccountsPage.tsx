@@ -40,7 +40,13 @@ import {
 } from "./SapfActions";
 import SapfPageLoading from "./SapfPageLoading";
 
-const roleOptions = ["OFFICER", "APPROVER", "ADMIN", "SUPER_ADMIN"] as const;
+const roleOptions = [
+  "OFFICER",
+  "APPROVER",
+  "ADMIN",
+  "SUPER_ADMIN",
+  "EQUIPMENT_PROVISIONER",
+] as const;
 const approverRoleOptions = ["APPROVER", "ADMIN", "SUPER_ADMIN"] as const;
 const positionOptions = [
   "NONE",
@@ -144,7 +150,9 @@ function AccountRow({
     popup.showSuccess(result.message || "Role updated.");
     setRole(nextRole);
     if (nextRole === "ADMIN") setPosition("SDS");
-    if (["OFFICER", "SUPER_ADMIN"].includes(nextRole)) setPosition("NONE");
+    if (["OFFICER", "SUPER_ADMIN", "EQUIPMENT_PROVISIONER"].includes(nextRole)) {
+      setPosition("NONE");
+    }
     await onUpdated();
   };
 
@@ -669,8 +677,8 @@ export default function SapfAccountsPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Officer and super admin accounts do not need a position.
-                    Admin accounts use SDS.
+                    Officer, equipment provisioner, and super admin accounts do
+                    not need a position. Admin accounts use SDS.
                   </p>
                 </div>
                 <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">

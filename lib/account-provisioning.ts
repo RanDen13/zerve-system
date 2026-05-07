@@ -2,7 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { hashPassword } from "better-auth/crypto";
 import { v4 as uuid } from "uuid";
 
-export const managedRoles = ["OFFICER", "APPROVER", "ADMIN", "SUPER_ADMIN"] as const;
+export const managedRoles = [
+  "OFFICER",
+  "APPROVER",
+  "ADMIN",
+  "SUPER_ADMIN",
+  "EQUIPMENT_PROVISIONER",
+] as const;
 
 export type ManagedRole = (typeof managedRoles)[number];
 

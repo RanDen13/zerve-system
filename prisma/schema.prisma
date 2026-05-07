@@ -36,6 +36,9 @@ model User {
   sessions                  Session[]
   tutorialProgress          UserTutorialProgress[]
   createdVenueBlocks        VenueBlock[]           @relation("VenueBlockCreator")
+  createdEquipmentItems     EquipmentItem[]        @relation("EquipmentItemCreator")
+  providedEquipmentRequests SAPFEquipmentRequest[] @relation("EquipmentProvidedBy")
+  returnedEquipmentRequests SAPFEquipmentRequest[] @relation("EquipmentReturnedBy")
 
   @@map("user")
 }
@@ -61,6 +64,7 @@ model EventSpace {
   name              String
   location          String
   capacity          Int
+  bookingAdvanceDays Int               @default(30)
   description       String
   status            EventSpaceStatus   @default(ACTIVE)
   createdAt         DateTime           @default(now())
@@ -166,6 +170,7 @@ model SAPFRequest {
   schedules                   SAPFRequestSchedule[]
   venues                      SAPFRequestVenue[]
   supportRequests             SAPFSupportRequest[]
+  equipmentRequests           SAPFEquipmentRequest[]
 
   @@index([officerId])
   @@index([status])
@@ -248,6 +253,48 @@ model SAPFSupportRequest {
   @@unique([requestId, value])
   @@index([requestId])
   @@map("sapf_support_request")
+}
+
+model EquipmentItem {
+  id              String                 @id
+  name            String                 @unique
+  supportLabel    String?                @unique
+  totalQuantity   Int                    @default(0)
+  active          Boolean                @default(true)
+  createdById     String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  createdBy       User?                  @relation("EquipmentItemCreator", fields: [createdById], references: [id])
+  requests        SAPFEquipmentRequest[]
+
+  @@index([active])
+  @@map("equipment_item")
+}
+
+model SAPFEquipmentRequest {
+  id                String                     @id
+  requestId         String
+  equipmentItemId   String
+  quantity          Int
+  status            SAPFEquipmentRequestStatus @default(REQUESTED)
+  providedAt        DateTime?
+  providedById      String?
+  returnRequestedAt DateTime?
+  returnedAt        DateTime?
+  returnedById      String?
+  dueReminderSentAt DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  equipmentItem     EquipmentItem              @relation(fields: [equipmentItemId], references: [id], onDelete: Cascade)
+  providedBy        User?                      @relation("EquipmentProvidedBy", fields: [providedById], references: [id])
+  request           SAPFRequest                @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  returnedBy        User?                      @relation("EquipmentReturnedBy", fields: [returnedById], references: [id])
+
+  @@unique([requestId, equipmentItemId])
+  @@index([equipmentItemId])
+  @@index([requestId])
+  @@index([status])
+  @@map("sapf_equipment_request")
 }
 
 model ApprovalStep {
@@ -561,6 +608,14 @@ enum NotificationType {
   CONFLICT
   FINAL
   COMMENT
+  EQUIPMENT
+}
+
+enum SAPFEquipmentRequestStatus {
+  REQUESTED
+  PROVIDED
+  RETURN_REQUESTED
+  RETURNED
 }
 
 enum SAPFChangeRequestType {
@@ -579,6 +634,7 @@ enum UserRole {
   APPROVER
   ADMIN
   SUPER_ADMIN
+  EQUIPMENT_PROVISIONER
 }
 
 enum TutorialProgressStatus {

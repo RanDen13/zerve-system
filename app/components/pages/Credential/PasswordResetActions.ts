@@ -23,18 +23,6 @@ export async function requestPasswordResetEmail(
       return { success: false, message: "Email is required." };
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
-      select: { role: true },
-    });
-
-    if (user?.role?.toUpperCase() === "SUPER_ADMIN") {
-      return {
-        success: false,
-        message: "Password reset is not available for super admin accounts.",
-      };
-    }
-
     await auth.api.requestPasswordReset({
       headers: await headers(),
       body: {
@@ -87,12 +75,6 @@ export async function resetPasswordWithToken(
 
     if (!user) {
       return { success: false, message: "Account not found." };
-    }
-    if (user.role?.toUpperCase() === "SUPER_ADMIN") {
-      return {
-        success: false,
-        message: "Password reset is not available for super admin accounts.",
-      };
     }
 
     await auth.api.resetPassword({

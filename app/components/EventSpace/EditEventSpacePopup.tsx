@@ -47,6 +47,25 @@ const EditEventSpacePopup = ({
   const [descriptionLength, setDescriptionLength] = useState(0);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [existingImages, setExistingImages] = useState(() => {
+    if (eventSpace.images?.length) {
+      return eventSpace.images.map((image) => ({
+        id: image.id,
+        src: `data:image/jpeg;base64,${Buffer.from(image.data).toString("base64")}`,
+      }));
+    }
+
+    if (eventSpace.image) {
+      return [
+        {
+          id: "legacy",
+          src: `data:image/jpeg;base64,${Buffer.from(eventSpace.image).toString("base64")}`,
+        },
+      ];
+    }
+
+    return [];
+  });
   const [imagesUpdated, setImagesUpdated] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const statusPopup = usePopup();
@@ -72,6 +91,7 @@ const EditEventSpacePopup = ({
     const previews = nextFiles.map((file) => URL.createObjectURL(file));
     setImageFiles(nextFiles);
     setImagePreviews(previews);
+    setExistingImages([]);
     setImagesUpdated(true);
   };
 
@@ -82,6 +102,11 @@ const EditEventSpacePopup = ({
       if (preview) URL.revokeObjectURL(preview);
       return current.filter((_, idx) => idx !== index);
     });
+    setImagesUpdated(true);
+  };
+
+  const removeExistingImageAt = (index: number) => {
+    setExistingImages((current) => current.filter((_, idx) => idx !== index));
     setImagesUpdated(true);
   };
 
@@ -106,7 +131,16 @@ const EditEventSpacePopup = ({
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
-    if (imagesUpdated && imageFiles.length > 0) {
+    if (imagesUpdated) {
+      formData.set("replaceImages", "true");
+      formData.set(
+        "keepImageIds",
+        JSON.stringify(
+          existingImages
+            .map((image) => image.id)
+            .filter((id) => id !== "legacy"),
+        ),
+      );
       imageFiles.forEach((file) => formData.append("images", file));
     }
 
@@ -176,19 +210,16 @@ const EditEventSpacePopup = ({
                   onDragLeave={handleDragLeave}
                 >
                   {(() => {
-                    const existingImages = eventSpace.images?.length
-                      ? eventSpace.images.map(
-                          (image) =>
-                            `data:image/jpeg;base64,${Buffer.from(image.data).toString("base64")}`,
-                        )
-                      : eventSpace.image
-                        ? [
-                            `data:image/jpeg;base64,${Buffer.from(eventSpace.image).toString("base64")}`,
-                          ]
-                        : [];
                     const displayImages = imagePreviews.length
-                      ? imagePreviews
-                      : existingImages;
+                      ? imagePreviews.map((src, index) => ({
+                          id: `new-${index}`,
+                          src,
+                          isNew: true,
+                        }))
+                      : existingImages.map((image) => ({
+                          ...image,
+                          isNew: false,
+                        }));
 
                     if (displayImages.length === 0) {
                       return (
@@ -223,7 +254,9 @@ const EditEventSpacePopup = ({
                               {displayImages.length === 1 ? "" : "s"}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Uploading new images will replace this gallery.
+                              {imagePreviews.length
+                                ? "These new images will replace this gallery."
+                                : "Remove images here, or upload new images to replace the gallery."}
                             </p>
                           </div>
                           <label className="cursor-pointer">
@@ -248,24 +281,27 @@ const EditEventSpacePopup = ({
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                           {displayImages.map((preview, index) => (
                             <div
-                              key={`${preview}-${index}`}
+                              key={`${preview.id}-${index}`}
                               className="group relative h-24 overflow-hidden rounded-md border"
                             >
                               <Image
-                                src={preview}
+                                src={preview.src}
                                 alt={`Preview ${index + 1}`}
                                 fill
                                 className="object-cover"
                               />
-                              {imagePreviews.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => removeImageAt(index)}
-                                  className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white opacity-0 transition group-hover:opacity-100"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  preview.isNew
+                                    ? removeImageAt(index)
+                                    : removeExistingImageAt(index)
+                                }
+                                className="absolute right-2 top-2 rounded-full bg-black/70 p-1.5 text-white shadow-sm transition hover:bg-red-600"
+                                aria-label={`Remove image ${index + 1}`}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -320,6 +356,20 @@ const EditEventSpacePopup = ({
                   placeholder="e.g., 20"
                   required
                   min={1}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bookingAdvanceDays">
+                  Booking Advance Days
+                </Label>
+                <Input
+                  id="bookingAdvanceDays"
+                  type="number"
+                  name="bookingAdvanceDays"
+                  defaultValue={(eventSpace as any).bookingAdvanceDays ?? 30}
+                  min={0}
+                  required
                 />
               </div>
 

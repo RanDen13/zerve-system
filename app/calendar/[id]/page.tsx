@@ -16,13 +16,18 @@ function calendarItems(venue: any, globalBlocks: any[]): VenueCalendarItem[] {
     block.type === "SYSTEM_MAINTENANCE"
       ? ("MAINTENANCE" as const)
       : ("UNIVERSITY" as const);
+  const requestTitle = (request: any) =>
+    `${request.requestNumber} - ${request.title}${
+      request.setting === "Off-Campus" ? " (Off-campus)" : ""
+    }`;
 
   return [
     ...(venue.sapfRequests || []).flatMap((request: any) =>
       (request.schedules || []).map((schedule: any) => ({
         id: schedule.id,
-        title: `${request.requestNumber} - ${request.title}`,
+        title: requestTitle(request),
         subtitle: [
+          request.setting === "Off-Campus" ? "Off-campus" : null,
           request.organization,
           request.department,
           request.status?.replaceAll("_", " "),
@@ -35,7 +40,10 @@ function calendarItems(venue: any, globalBlocks: any[]): VenueCalendarItem[] {
           request.status === "APPROVED"
             ? ("BOOKED" as const)
             : ("PENDING" as const),
-        scope: "VENUE" as const,
+        scope:
+          request.setting === "Off-Campus"
+            ? ("OFF_CAMPUS" as const)
+            : ("VENUE" as const),
       })),
     ),
     ...(venue.venueBlocks || []).flatMap((block: any) =>
@@ -74,10 +82,10 @@ const page = async ({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ kiosk?: string }>;
+  searchParams: Promise<{ kiosk?: string; date?: string }>;
 }) => {
   const { id } = await params;
-  const { kiosk } = await searchParams;
+  const { kiosk, date } = await searchParams;
   const isKiosk = kiosk === "true";
   const { venues, globalBlocks } = await getVenueCalendarData();
   const venue = venues.find((item) => item.id === id);
@@ -169,9 +177,11 @@ const page = async ({
         </div>
 
         <VenueMonthCalendar
+          key={date || "venue-month"}
           items={calendarItems(venue, globalBlocks)}
           title={`${venue.name} calendar`}
           description="Pending requests are soft holds; booked reservations and blocks reserve dates."
+          initialDate={date}
         />
       </div>
     </main>

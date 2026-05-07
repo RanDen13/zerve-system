@@ -16,6 +16,13 @@ import {
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { v4 as uuid } from "uuid";
+import {
+  notifyOfficerEquipmentStatusOnApproval,
+  notifyProvisionersForEquipmentRequest,
+  replaceSapfEquipmentRequests,
+  sendEquipmentDueReminders,
+  validateSapfEquipmentAvailability,
+} from "./EquipmentActions";
 import { normalizeSapfRequest } from "./sapfData";
 import {
   addSapfCalendarDays,
@@ -25,7 +32,13 @@ import {
   startOfSapfDay,
 } from "./sapfSchedule";
 
-const roleValues = ["OFFICER", "APPROVER", "ADMIN", "SUPER_ADMIN"] as const;
+const roleValues = [
+  "OFFICER",
+  "APPROVER",
+  "ADMIN",
+  "SUPER_ADMIN",
+  "EQUIPMENT_PROVISIONER",
+] as const;
 const approverRoleValues = ["APPROVER", "ADMIN", "SUPER_ADMIN"] as const;
 const approverPositionValues = [
   "ADVISER",
@@ -51,14 +64,10 @@ const requiredFixedPositions = [
   "VPAA",
   "UNIVERSITY_PRESIDENT",
 ] as const;
-const MIN_BOOKING_ADVANCE_DAYS = 30;
+const DEFAULT_BOOKING_ADVANCE_DAYS = 30;
 const MAX_SDS_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const MAX_PROGRAM_FLOW_ATTACHMENT_BYTES = 25 * 1024 * 1024;
-const elevatedApprovalTimeoutPositions = new Set([
-  "VPAA_ASSISTANT",
-  "VPAA",
-  "UNIVERSITY_PRESIDENT",
-]);
+const APPROVAL_TIMEOUT_DAYS = 3;
 const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
 const ADMIN_ROLE = "ADMIN";
 const venueBlockTypes = ["UNIVERSITY_WIDE", "SYSTEM_MAINTENANCE"] as const;
@@ -260,8 +269,8 @@ function formatMegabytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function minimumBookingDate() {
-  return addSapfCalendarDays(startOfSapfDay(), MIN_BOOKING_ADVANCE_DAYS);
+function minimumBookingDate(advanceDays = DEFAULT_BOOKING_ADVANCE_DAYS) {
+  return addSapfCalendarDays(startOfSapfDay(), Math.max(0, advanceDays));
 }
 
 function hasOverlap(
@@ -328,14 +337,18 @@ function parseBlockScheduleSlots(
 
 function validateScheduleSlots(
   slots: ScheduleSlot[],
-  options: { enforceAdvance?: boolean } = {},
+  options: { enforceAdvance?: boolean; advanceDays?: number } = {},
 ) {
   if (slots.length === 0) {
     throw new Error("Add at least one schedule day.");
   }
 
+  const advanceDays = Math.max(
+    0,
+    options.advanceDays ?? DEFAULT_BOOKING_ADVANCE_DAYS,
+  );
   const earliestBookingDate = options.enforceAdvance
-    ? minimumBookingDate()
+    ? minimumBookingDate(advanceDays)
     : null;
 
   slots.forEach((slot, index) => {
@@ -356,7 +369,9 @@ function validateScheduleSlots(
 
     if (earliestBookingDate && slot.startAt < earliestBookingDate) {
       throw new Error(
-        `Reservations must be booked at least ${MIN_BOOKING_ADVANCE_DAYS} days in advance. Choose ${formatSapfDateForMessage(earliestBookingDate)} or later.`,
+        advanceDays > 0
+          ? `Reservations must be booked at least ${advanceDays} days in advance. Choose ${formatSapfDateForMessage(earliestBookingDate)} or later.`
+          : `Reservations for this venue can be booked immediately. Choose ${formatSapfDateForMessage(earliestBookingDate)} or later.`,
       );
     }
   });
@@ -522,12 +537,12 @@ function scheduleSlotsForLog(slots: ScheduleRange[]) {
   );
 }
 
-function approvalTimeoutDays(position: string) {
-  return elevatedApprovalTimeoutPositions.has(position) ? 10 : 5;
+function approvalTimeoutDays() {
+  return APPROVAL_TIMEOUT_DAYS;
 }
 
 function approvalStepTimedOut(step: { position: string; updatedAt: Date }) {
-  const timeoutMs = approvalTimeoutDays(step.position) * 24 * 60 * 60 * 1000;
+  const timeoutMs = approvalTimeoutDays() * 24 * 60 * 60 * 1000;
   return Date.now() - new Date(step.updatedAt).getTime() >= timeoutMs;
 }
 
@@ -558,7 +573,7 @@ async function enforceSapfApprovalTimeouts(options: { requestId?: string } = {})
     const activeStep = request.approvalSteps.find(approvalStepTimedOut);
     if (!activeStep) continue;
 
-    const days = approvalTimeoutDays(activeStep.position);
+    const days = approvalTimeoutDays();
     const comment = `${activeStep.label} did not respond within ${days} days. The reservation was automatically cancelled.`;
 
     await prisma.$transaction(async (tx) => {
@@ -771,6 +786,18 @@ function sapfListInclude() {
     },
     supportRequests: {
       select: { value: true },
+      orderBy: { createdAt: "asc" as const },
+    },
+    equipmentRequests: {
+      include: {
+        equipmentItem: true,
+        providedBy: {
+          select: { id: true, name: true, email: true },
+        },
+        returnedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
       orderBy: { createdAt: "asc" as const },
     },
     schedules: {
@@ -1254,6 +1281,7 @@ export async function getPublicCalendarData(): Promise<ActionResult<any>> {
                 requestNumber: true,
                 title: true,
                 organization: true,
+                setting: true,
                 status: true,
                 schedules: {
                   select: {
@@ -1448,6 +1476,7 @@ export async function getSapfRequestList({
     }
 
     await enforceSapfApprovalTimeouts();
+    await sendEquipmentDueReminders();
 
     if (surface === "approvals" && role === "OFFICER") {
       return {
@@ -1529,6 +1558,7 @@ export async function getSapfWorkspace(): Promise<ActionResult<any>> {
     }
 
     await enforceSapfApprovalTimeouts();
+    await sendEquipmentDueReminders();
 
     const include = {
       officer: {
@@ -1549,6 +1579,18 @@ export async function getSapfWorkspace(): Promise<ActionResult<any>> {
       },
       supportRequests: {
         select: { value: true },
+        orderBy: { createdAt: "asc" as const },
+      },
+      equipmentRequests: {
+        include: {
+          equipmentItem: true,
+          providedBy: {
+            select: { id: true, name: true, email: true },
+          },
+          returnedBy: {
+            select: { id: true, name: true, email: true },
+          },
+        },
         orderBy: { createdAt: "asc" as const },
       },
       schedules: {
@@ -1779,6 +1821,7 @@ export async function getSapfRequestById(
     }
 
     await enforceSapfApprovalTimeouts({ requestId: id });
+    await sendEquipmentDueReminders();
 
     const include = {
       officer: {
@@ -1799,6 +1842,18 @@ export async function getSapfRequestById(
       },
       supportRequests: {
         select: { value: true },
+        orderBy: { createdAt: "asc" as const },
+      },
+      equipmentRequests: {
+        include: {
+          equipmentItem: true,
+          providedBy: {
+            select: { id: true, name: true, email: true },
+          },
+          returnedBy: {
+            select: { id: true, name: true, email: true },
+          },
+        },
         orderBy: { createdAt: "asc" as const },
       },
       schedules: {
@@ -2025,8 +2080,6 @@ export async function saveSapfRequest(
       };
     }
 
-    validateScheduleSlots(scheduleSlots, { enforceAdvance: !existing });
-
     if (venueIds.length === 0) {
       return {
         success: false,
@@ -2048,6 +2101,15 @@ export async function saveSapfRequest(
         message: "One or more selected venues are not available for requests.",
       };
     }
+    const requiredAdvanceDays = selectedVenues.reduce(
+      (max, venue: any) =>
+        Math.max(max, Number(venue.bookingAdvanceDays ?? DEFAULT_BOOKING_ADVANCE_DAYS)),
+      0,
+    );
+    validateScheduleSlots(scheduleSlots, {
+      enforceAdvance: !existing,
+      advanceDays: requiredAdvanceDays,
+    });
 
     const attendeeCount = field(data, "noOfParticipants");
     if (!attendeeCount) {
@@ -2072,6 +2134,11 @@ export async function saveSapfRequest(
 
     const sapf = buildSapfPayload(data);
     sapf.venue = selectedVenues.map((venue) => venue.name).join(", ");
+    await validateSapfEquipmentAvailability({
+      sapf,
+      scheduleSlots,
+      excludeRequestId: requestId || undefined,
+    });
     const title = sapf.activityTitle || "Untitled activity";
     const organization = sapf.organization || "Unspecified organization";
     const department = sapf.department || "Unspecified department";
@@ -2192,6 +2259,7 @@ export async function saveSapfRequest(
           );
         }
         await replaceSapfListRows(tx, created.id, sapf);
+        await replaceSapfEquipmentRequests(tx, created.id, sapf);
         await logSapfActivity(tx, {
           requestId: created.id,
           actorId: user.id,
@@ -2265,6 +2333,7 @@ export async function saveSapfRequest(
           );
         }
         await replaceSapfListRows(tx, updated.id, sapf);
+        await replaceSapfEquipmentRequests(tx, updated.id, sapf);
 
         if (returnedStep) {
           await tx.approvalStep.update({
@@ -2396,6 +2465,8 @@ export async function saveSapfRequest(
           request.id,
         );
       }
+
+      await notifyProvisionersForEquipmentRequest(request.id, "submitted");
     }
 
     if (existing && isSdsEditor && changes.length > 0) {
@@ -2434,6 +2505,7 @@ export async function saveSapfRequest(
     revalidatePath("/user/spaces");
     revalidatePath("/user/bookings");
     revalidatePath("/user/approvals");
+    revalidatePath("/user/equipment");
     if (request?.id) {
       revalidatePath(`/user/bookings/${request.id}`);
       revalidatePath(`/user/approvals/${request.id}`);
@@ -3578,6 +3650,11 @@ export async function reviewSapfRequest(
       }
     });
 
+    if (!nextStep) {
+      await notifyProvisionersForEquipmentRequest(request.id, "approved");
+      await notifyOfficerEquipmentStatusOnApproval(request.id);
+    }
+
     await createNotification(
       request.officerId,
       nextStep ? "Reservation step approved" : "Reservation fully approved",
@@ -3627,6 +3704,7 @@ export async function reviewSapfRequest(
     });
 
     revalidatePath("/user/dashboard");
+    revalidatePath("/user/equipment");
     return {
       success: true,
       message: nextStep ? "Step approved." : "Request fully approved.",

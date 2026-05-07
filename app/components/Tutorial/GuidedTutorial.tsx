@@ -24,7 +24,12 @@ import {
   type TutorialProgressStatus,
 } from "./TutorialActions";
 
-type AppRole = "OFFICER" | "APPROVER" | "ADMIN" | "SUPER_ADMIN";
+type AppRole =
+  | "OFFICER"
+  | "APPROVER"
+  | "ADMIN"
+  | "SUPER_ADMIN"
+  | "EQUIPMENT_PROVISIONER";
 
 type TutorialStep = {
   id: string;
@@ -64,7 +69,10 @@ const commonClosingSteps: TutorialStep[] = [
   },
 ];
 
-const roleSteps: Record<Exclude<AppRole, "SUPER_ADMIN">, TutorialStep[]> = {
+const roleSteps: Record<
+  Exclude<AppRole, "SUPER_ADMIN" | "EQUIPMENT_PROVISIONER">,
+  TutorialStep[]
+> = {
   OFFICER: [
     {
       id: "dashboard-nav",
@@ -333,12 +341,15 @@ export default function GuidedTutorial({
   const [saving, setSaving] = useState(false);
 
   const steps = useMemo(() => {
-    if (userRole === "SUPER_ADMIN") return [];
+    if (userRole === "SUPER_ADMIN" || userRole === "EQUIPMENT_PROVISIONER") {
+      return [];
+    }
     return roleSteps[userRole] ?? [];
   }, [userRole]);
   const step = steps[stepIndex];
   const shouldAutoStart =
     userRole !== "SUPER_ADMIN" &&
+    userRole !== "EQUIPMENT_PROVISIONER" &&
     initialStatus !== "COMPLETED" &&
     initialStatus !== "CANCELLED";
 
@@ -367,7 +378,13 @@ export default function GuidedTutorial({
   }, [active, step]);
 
   const beginTutorial = useCallback(() => {
-    if (userRole === "SUPER_ADMIN" || steps.length === 0) return;
+    if (
+      userRole === "SUPER_ADMIN" ||
+      userRole === "EQUIPMENT_PROVISIONER" ||
+      steps.length === 0
+    ) {
+      return;
+    }
     setStepIndex(0);
     setActive(true);
     void startTutorialProgress();

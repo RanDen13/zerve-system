@@ -44,6 +44,7 @@ import {
   Clock,
   Sun,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 export type VenueCalendarItem = {
@@ -53,7 +54,8 @@ export type VenueCalendarItem = {
   startAt: Date | string;
   endAt: Date | string;
   status: "PENDING" | "BOOKED" | "APPROVED" | "BLOCKED";
-  scope?: "VENUE" | "UNIVERSITY" | "MAINTENANCE";
+  scope?: "VENUE" | "UNIVERSITY" | "MAINTENANCE" | "OFF_CAMPUS";
+  href?: string;
 };
 
 type NormalizedCalendarItem = Omit<VenueCalendarItem, "startAt" | "endAt"> & {
@@ -144,6 +146,9 @@ function rainLabel(weather?: CalendarWeatherDay) {
 }
 
 function statusClass(item: Pick<VenueCalendarItem, "status" | "scope">) {
+  if (item.scope === "OFF_CAMPUS") {
+    return "border-sky-400/40 bg-sky-300/25 text-sky-800 dark:border-sky-300/30 dark:bg-sky-300/15 dark:text-sky-200";
+  }
   if (item.scope === "UNIVERSITY") {
     return "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-200";
   }
@@ -197,19 +202,29 @@ export default function VenueMonthCalendar({
   title = "Venue Calendar",
   description = "Month view of pending, booked, and blocked dates.",
   compact = false,
+  initialDate,
+  initialView,
 }: {
   items: VenueCalendarItem[];
   title?: string;
   description?: string;
   compact?: boolean;
+  initialDate?: Date | string;
+  initialView?: CalendarView;
 }) {
+  const router = useRouter();
+  const initialDay = startOfDay(
+    sapfCalendarDate(initialDate || new Date()),
+  );
   const [selectedDay, setSelectedDay] = useState(() =>
-    startOfDay(sapfCalendarDate(new Date())),
+    initialDay,
   );
   const [visibleMonth, setVisibleMonth] = useState(() =>
-    startOfMonth(sapfCalendarDate(new Date())),
+    startOfMonth(initialDay),
   );
-  const [calendarView, setCalendarView] = useState<CalendarView>("month");
+  const [calendarView, setCalendarView] = useState<CalendarView>(
+    initialView || (initialDate ? "day" : "month"),
+  );
   const [weatherDays, setWeatherDays] = useState<CalendarWeatherDay[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(true);
 
@@ -306,6 +321,13 @@ export default function VenueMonthCalendar({
     setSelectedDay(startOfDay(day));
     setVisibleMonth(startOfMonth(day));
     setCalendarView(nextView);
+  };
+  const openCalendarItem = (item: NormalizedCalendarItem) => {
+    if (item.href) {
+      router.push(item.href);
+      return;
+    }
+    selectCalendarDay(item.startAt, "day");
   };
 
   return (
@@ -419,7 +441,8 @@ export default function VenueMonthCalendar({
         {[
           { label: "Pending", className: "bg-amber-500" },
           { label: "Booked", className: "bg-emerald-500" },
-          { label: "Blocked", className: "bg-red-500" },
+          { label: "Off-campus", className: "bg-sky-300" },
+          { label: "Venue block", className: "bg-red-500" },
           { label: "University-wide", className: "bg-violet-500" },
           { label: "Maintenance", className: "bg-yellow-500" },
         ].map((item) => (
@@ -460,6 +483,7 @@ export default function VenueMonthCalendar({
           weatherByDate={weatherByDate}
           onSelectDay={(day) => selectCalendarDay(day)}
           onOpenDay={(day) => selectCalendarDay(day, "day")}
+          onOpenItem={openCalendarItem}
         />
         </motion.div>
       ) : (
@@ -476,6 +500,7 @@ export default function VenueMonthCalendar({
           visibleMonth={visibleMonth}
           weatherByDate={weatherByDate}
           onSelectDay={(day) => selectCalendarDay(day, "day")}
+          onOpenItem={openCalendarItem}
         />
         </motion.div>
       )}
@@ -494,6 +519,7 @@ function MonthCalendar({
   weatherByDate,
   onSelectDay,
   onOpenDay,
+  onOpenItem,
 }: {
   compact: boolean;
   monthItems: NormalizedCalendarItem[];
@@ -503,6 +529,7 @@ function MonthCalendar({
   weatherByDate: Map<string, CalendarWeatherDay>;
   onSelectDay: (day: Date) => void;
   onOpenDay: (day: Date) => void;
+  onOpenItem: (item: NormalizedCalendarItem) => void;
 }) {
   const maxLanes = compact ? 3 : 4;
   const weekMinHeight = compact ? 128 : 164;
@@ -619,7 +646,7 @@ function MonthCalendar({
                       gridRow: lane + 1,
                     }}
                     title={`${item.title} - ${itemTimeLabel(item)}`}
-                    onClick={() => onOpenDay(item.startAt)}
+                    onClick={() => onOpenItem(item)}
                   >
                     <span className="truncate">
                       {item.title}
@@ -652,12 +679,14 @@ function DayCalendar({
   visibleMonth,
   weatherByDate,
   onSelectDay,
+  onOpenItem,
 }: {
   items: NormalizedCalendarItem[];
   selectedDay: Date;
   visibleMonth: Date;
   weatherByDate: Map<string, CalendarWeatherDay>;
   onSelectDay: (day: Date) => void;
+  onOpenItem: (item: NormalizedCalendarItem) => void;
 }) {
   const hours = Array.from(
     { length: DAY_END_HOUR - DAY_START_HOUR },
@@ -746,10 +775,11 @@ function DayCalendar({
           <div className="absolute left-[72px] right-0 top-0">
             {dayEventBlocks.map(({ item, top, height, lane }) => {
               return (
-                <div
+                <button
+                  type="button"
                   key={item.id}
                   className={cn(
-                    "absolute left-3 right-3 overflow-hidden rounded-md border p-2 text-xs shadow-xs",
+                    "absolute left-3 right-3 overflow-hidden rounded-md border p-2 text-left text-xs shadow-xs",
                     statusClass(item),
                   )}
                   style={{
@@ -759,6 +789,7 @@ function DayCalendar({
                     right: `calc(${(1 - (lane + 1) / laneCount) * 100}% + 12px)`,
                   }}
                   title={`${item.title} - ${itemTimeLabel(item)}`}
+                  onClick={() => onOpenItem(item)}
                 >
                   <p className="truncate font-semibold">{item.title}</p>
                   <p className="mt-1 truncate font-medium">
@@ -769,7 +800,7 @@ function DayCalendar({
                       {item.subtitle}
                     </p>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -862,9 +893,14 @@ function DayCalendar({
             </p>
           ) : (
             dayItems.map((item) => (
-              <div
+              <button
+                type="button"
                 key={item.id}
-                className={cn("rounded-md border p-3 text-sm", statusClass(item))}
+                className={cn(
+                  "w-full rounded-md border p-3 text-left text-sm",
+                  statusClass(item),
+                )}
+                onClick={() => onOpenItem(item)}
               >
                 <p className="font-semibold">{item.title}</p>
                 <p className="mt-1 text-xs font-medium">{itemTimeLabel(item)}</p>
@@ -873,7 +909,7 @@ function DayCalendar({
                     {item.subtitle}
                   </p>
                 )}
-              </div>
+              </button>
             ))
           )}
         </div>

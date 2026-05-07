@@ -35,6 +35,7 @@ import {
   getSapfRequestById,
   requestSapfEditApproval,
 } from "./SapfActions";
+import { requestEquipmentReturn } from "./EquipmentActions";
 import SapfPageLoading from "./SapfPageLoading";
 import SapfReadonlyDetails from "./SapfReadonlyDetails";
 import {
@@ -61,6 +62,7 @@ export default function SapfBookingDetailPage({
   const [showEditRequest, setShowEditRequest] = useState(false);
   const [editReason, setEditReason] = useState("");
   const [requestingEdit, setRequestingEdit] = useState(false);
+  const [requestingReturn, setRequestingReturn] = useState(false);
 
   const refresh = async () => {
     setLoading(true);
@@ -141,6 +143,10 @@ export default function SapfBookingDetailPage({
     !canEdit &&
     !["CANCELLED", "REJECTED"].includes(request.status);
   const cancelNeedsSdsApproval = canCancel && reachedSds;
+  const canRequestEquipmentReturn =
+    me?.role === "OFFICER" &&
+    request.status === "APPROVED" &&
+    request.equipmentRequests?.some((item: any) => item.status === "PROVIDED");
 
   const handleCancel = async () => {
     if (cancelling) return;
@@ -202,6 +208,28 @@ export default function SapfBookingDetailPage({
     }
   };
 
+  const handleEquipmentReturn = async () => {
+    if (requestingReturn) return;
+
+    const confirmed = await popup.showWarning(
+      "Mark this event as done and ask the equipment provisioner to pick up the provided equipment?",
+    );
+    if (!confirmed) return;
+
+    setRequestingReturn(true);
+    try {
+      const result = await requestEquipmentReturn(request.id);
+      if (!result.success) {
+        popup.showError(result.message || "Failed to request equipment return.");
+        return;
+      }
+      popup.showSuccess(result.message || "Equipment return requested.");
+      await refresh();
+    } finally {
+      setRequestingReturn(false);
+    }
+  };
+
   return (
     <div className="space-y-6 p-4 lg:p-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -245,6 +273,21 @@ export default function SapfBookingDetailPage({
                 <ShieldCheck className="mr-2 h-4 w-4" />
               )}
               {pendingEditRequest ? "Edit Pending SDS" : "Request Edit"}
+            </Button>
+          )}
+          {canRequestEquipmentReturn && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleEquipmentReturn}
+              disabled={requestingReturn}
+            >
+              {requestingReturn ? (
+                <ButtonSpinner />
+              ) : (
+                <RefreshCcw className="mr-2 h-4 w-4" />
+              )}
+              {requestingReturn ? "Sending..." : "Event Done"}
             </Button>
           )}
           <Button asChild variant="outline">

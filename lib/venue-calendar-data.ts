@@ -35,6 +35,7 @@ export async function getVenueCalendarData() {
                 title: true,
                 organization: true,
                 department: true,
+                setting: true,
                 status: true,
                 createdAt: true,
                 schedules: {

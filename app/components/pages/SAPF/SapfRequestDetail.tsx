@@ -326,6 +326,11 @@ export function RequestSummary({
               Pending conflict
             </Badge>
           )}
+          {request.setting === "Off-Campus" && (
+            <Badge className="bg-sky-300/30 text-sky-800 dark:bg-sky-300/15 dark:text-sky-200">
+              Off-campus
+            </Badge>
+          )}
           {showPdf && request.status === "APPROVED" && (
             <a href={`/api/sapf/${request.id}/pdf`} target="_blank">
               <Button size="sm" variant="outline">

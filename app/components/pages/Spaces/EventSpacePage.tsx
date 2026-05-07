@@ -20,7 +20,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/app/components/ui/tabs";
-import { ArrowLeft, CheckCircle, MapPin, Send, Users } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle, MapPin, Send, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -75,19 +75,32 @@ const EventSpacePage = ({
 
   const calendarItems = useMemo<VenueCalendarItem[]>(() => {
     if (!eventSpace) return [];
+    const requestTitle = (request: any) =>
+      `${request.requestNumber} - ${request.title}${
+        request.setting === "Off-Campus" ? " (Off-campus)" : ""
+      }`;
+
     return [
       ...(eventSpace.sapfRequests || []).flatMap((request) =>
         (request.schedules || []).map((schedule: any) => ({
           id: schedule.id,
-          title: `${request.requestNumber} - ${request.title}`,
-          subtitle: request.organization,
+          title: requestTitle(request),
+          subtitle: [
+            request.setting === "Off-Campus" ? "Off-campus" : null,
+            request.organization,
+          ]
+            .filter(Boolean)
+            .join(" - "),
           startAt: schedule.startAt,
           endAt: schedule.endAt,
           status:
             request.status === "APPROVED"
               ? ("BOOKED" as const)
               : ("PENDING" as const),
-          scope: "VENUE" as const,
+          scope:
+            request.setting === "Off-Campus"
+              ? ("OFF_CAMPUS" as const)
+              : ("VENUE" as const),
         })),
       ),
       ...(eventSpace.venueBlocks || []).flatMap((block) =>
@@ -183,7 +196,7 @@ const EventSpacePage = ({
         </TabsList>
 
         <TabsContent value="details" className="mt-4">
-          <MotionList className="grid gap-4 md:grid-cols-3">
+          <MotionList className="grid gap-4 md:grid-cols-4">
             <MotionItem>
               <Card className="panel-hover">
                 <CardContent className="flex items-center gap-3 p-5">
@@ -216,6 +229,21 @@ const EventSpacePage = ({
                     <p className="text-sm text-muted-foreground">Status</p>
                     <p className="font-semibold">
                       {eventSpace.status.replaceAll("_", " ")}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </MotionItem>
+            <MotionItem>
+              <Card className="panel-hover">
+                <CardContent className="flex items-center gap-3 p-5">
+                  <Calendar className="h-8 w-8 text-blue-600" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Booking</p>
+                    <p className="font-semibold">
+                      {Number((eventSpace as any).bookingAdvanceDays ?? 30) > 0
+                        ? `${(eventSpace as any).bookingAdvanceDays ?? 30} days advance`
+                        : "Immediate"}
                     </p>
                   </div>
                 </CardContent>

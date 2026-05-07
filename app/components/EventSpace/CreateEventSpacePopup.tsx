@@ -197,9 +197,10 @@ const CreateEventSpacePopup = ({ onClose }: { onClose: () => void }) => {
                             <button
                               type="button"
                               onClick={() => removeImageAt(index)}
-                              className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white opacity-0 transition group-hover:opacity-100"
+                              className="absolute right-2 top-2 rounded-full bg-black/70 p-1.5 text-white shadow-sm transition hover:bg-red-600"
+                              aria-label={`Remove image ${index + 1}`}
                             >
-                              <X className="h-3 w-3" />
+                              <X className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         ))}
@@ -270,6 +271,20 @@ const CreateEventSpacePopup = ({ onClose }: { onClose: () => void }) => {
                   placeholder="e.g., 20"
                   required
                   min={1}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bookingAdvanceDays">
+                  Booking Advance Days
+                </Label>
+                <Input
+                  id="bookingAdvanceDays"
+                  name="bookingAdvanceDays"
+                  type="number"
+                  min={0}
+                  defaultValue={30}
+                  required
                 />
               </div>
 

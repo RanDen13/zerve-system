@@ -33,7 +33,8 @@ const layout = async ({ children }: { children: React.ReactNode }) => {
     | "OFFICER"
     | "APPROVER"
     | "ADMIN"
-    | "SUPER_ADMIN";
+    | "SUPER_ADMIN"
+    | "EQUIPMENT_PROVISIONER";
   const tutorialProgress =
     userRole !== "SUPER_ADMIN"
       ? await prisma.userTutorialProgress.findUnique({
