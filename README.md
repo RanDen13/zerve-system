@@ -19,9 +19,8 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 ## SAPF PDF Generation
 
 SAPF PDFs are generated from the filled DOCX template, then converted with
-`docx2pdf-converter`. In Docker, the provided `Dockerfile` installs `unoconv`
-and LibreOffice Writer for the package's Linux conversion path. If you run the
-app outside Docker on Linux, install `unoconv` and LibreOffice Writer too.
+`docx2pdf-converter`. If you run the app on Linux outside Vercel, install
+`unoconv` and LibreOffice Writer for the conversion path.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
@@ -35,58 +34,6 @@ To learn more about Next.js, take a look at the following resources:
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Docker Deployment
-
-### Building the Docker Image
-
-The provided `Dockerfile` uses a multi-stage build to optimize image size:
-
-```bash
-docker build -t zerve:latest .
-```
-
-### Running with Docker Compose (Recommended)
-
-Use the provided `docker-compose.yml` to run the app with environment variables properly configured:
-
-```bash
-# Edit docker-compose.yml to set your environment variables
-docker-compose up -d
-```
-
-**Important: Environment Variables**
-
-The app requires the following environment variables for proper operation:
-
-- `BETTER_AUTH_URL`: The public URL of your app (e.g., `https://yourdomain.com`)
-- `NEXT_PUBLIC_URL`: Alternative fallback URL
-- `BETTER_AUTH_SECRET`: Secret key for authentication (generate a random string)
-- `DATABASE_URL`: Path to SQLite database (e.g., `file:./data/dev.db`)
-- `NEXT_PUBLIC_RECAPTCHA_SITE_KEY`: Public Google reCAPTCHA site key for email/password login
-- `RECAPTCHA_SECRET_KEY`: Secret Google reCAPTCHA key used by the auth server
-- `SMTP_*`: Email configuration variables
-
-### Running with Docker CLI
-
-If using Docker directly without Compose:
-
-```bash
-docker run -d \
-  -p 3000:3000 \
-  -e BETTER_AUTH_URL=https://yourdomain.com \
-  -e NEXT_PUBLIC_URL=https://yourdomain.com \
-  -e BETTER_AUTH_SECRET=your-secret-key \
-  -e DATABASE_URL=file:./data/dev.db \
-  -e NEXT_PUBLIC_RECAPTCHA_SITE_KEY=your-site-key \
-  -e RECAPTCHA_SECRET_KEY=your-recaptcha-secret-key \
-  -v $(pwd)/data:/app/data \
-  zerve:latest
-```
-
-### Native Bindings
-
-The Dockerfile includes build tools (`python3`, `make`, `g++`) in the runtime stage to properly compile the `better-sqlite3` native binding. This ensures compatibility with the Node.js runtime environment.
 
 ## Deploy on Vercel
 
