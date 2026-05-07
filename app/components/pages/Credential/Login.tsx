@@ -106,6 +106,8 @@ const Login = () => {
     [magicCode],
   );
   const busy = loading || googleLoading || verifyingMagicCode;
+  const captchaRequired = Boolean(recaptchaSiteKey);
+  const isCaptchaComplete = !captchaRequired || Boolean(captchaToken);
 
   useEffect(() => {
     if (
@@ -258,6 +260,16 @@ const Login = () => {
       return;
     }
 
+    try {
+      getCaptchaTokenOrThrow();
+    } catch (error) {
+      statusPopup.showError(
+        error instanceof Error ? error.message : "reCAPTCHA failed to run.",
+      );
+      resetCaptcha();
+      return;
+    }
+
     setVerifyingMagicCode(true);
     const verifyUrl = new URL(
       "/api/auth/magic-link/verify",
@@ -370,12 +382,20 @@ const Login = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="login-password"
-                    className="text-sm font-semibold"
-                  >
-                    Password
-                  </Label>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label
+                      htmlFor="login-password"
+                      className="text-sm font-semibold"
+                    >
+                      Password
+                    </Label>
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm font-semibold text-primary hover:underline"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input
@@ -405,37 +425,9 @@ const Login = () => {
                   </div>
                 </div>
 
-                {recaptchaSiteKey && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">
-                      Human Check
-                    </Label>
-                    <div className="rounded-xl border border-border/70 bg-background/80 p-3">
-                      <div ref={recaptchaContainerRef} className="min-h-[78px]" />
-                      {captchaStatus === "loading" && (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Loading the human check...
-                        </p>
-                      )}
-                      {captchaStatus === "error" && (
-                        <p className="mt-2 text-xs text-destructive">
-                          reCAPTCHA could not load. Refresh the page and try
-                          again.
-                        </p>
-                      )}
-                      {captchaStatus === "ready" && !captchaToken && (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Complete the &quot;I&apos;m not a robot&quot; check
-                          before signing in.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 <Button
                   type="submit"
-                  disabled={busy}
+                  disabled={busy || !isCaptchaComplete}
                   className="w-full h-12 text-base bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg cursor-pointer"
                 >
                   {loading ? (
@@ -473,7 +465,7 @@ const Login = () => {
               <Button
                 type="button"
                 variant="outline"
-                disabled={busy}
+                disabled={busy || !isCaptchaComplete}
                 onClick={handleGoogleSignIn}
                 className="h-12 w-full bg-background text-base shadow-sm hover:bg-muted/60"
               >
@@ -528,7 +520,7 @@ const Login = () => {
 
                 <Button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || !isCaptchaComplete}
                   onClick={handleMagicCodeLogin}
                   className="h-12 w-full bg-primary text-primary-foreground hover:bg-primary/90"
                 >
@@ -537,6 +529,39 @@ const Login = () => {
                     ? "Checking..."
                     : "Sign In With Magic Code"}
                 </Button>
+
+                {recaptchaSiteKey && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">
+                      Human Check
+                    </Label>
+                    <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                      <div className="flex min-h-[86px] items-center justify-center">
+                        <div
+                          ref={recaptchaContainerRef}
+                          className="flex min-h-[78px] items-center justify-center"
+                        />
+                      </div>
+                      {captchaStatus === "loading" && (
+                        <p className="mt-2 text-center text-xs text-muted-foreground">
+                          Loading the human check...
+                        </p>
+                      )}
+                      {captchaStatus === "error" && (
+                        <p className="mt-2 text-center text-xs text-destructive">
+                          reCAPTCHA could not load. Refresh the page and try
+                          again.
+                        </p>
+                      )}
+                      {captchaStatus === "ready" && !captchaToken && (
+                        <p className="mt-2 text-center text-xs text-muted-foreground">
+                          Complete the &quot;I&apos;m not a robot&quot; check
+                          before using any sign-in option.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <p className="mt-4 text-xs text-center text-muted-foreground">

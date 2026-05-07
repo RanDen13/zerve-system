@@ -45,3 +45,5 @@ dev.db
 data
 .codex*
 .pnpm-store
+db_dump.bak
+.agents

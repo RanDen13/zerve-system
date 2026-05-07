@@ -43,8 +43,8 @@ function validateImageFiles(files: File[]) {
   return null;
 }
 
-function isSuperAdmin(role?: string | null) {
-  return role?.toUpperCase() === "SUPER_ADMIN";
+function canManageVenues(role?: string | null) {
+  return ["ADMIN", "SUPER_ADMIN"].includes(role?.toUpperCase() || "");
 }
 
 export async function getAllEventSpaces(): Promise<
@@ -102,6 +102,7 @@ export async function getGlobalVenueBlocks(): Promise<ActionResult<any[]>> {
       },
       select: {
         id: true,
+        type: true,
         title: true,
         reason: true,
         schedules: {
@@ -193,6 +194,7 @@ export async function getEventSpaceById(
           venueBlocks: {
             select: {
               id: true,
+              type: true,
               title: true,
               reason: true,
               schedules: {
@@ -217,7 +219,8 @@ export async function getEventSpaceById(
           eventSpaceId: null,
         },
         select: {
-          id: true,
+         id: true,
+          type: true,
           title: true,
           reason: true,
           schedules: {
@@ -267,10 +270,10 @@ export async function getAllAmenities(): Promise<ActionResult<Amenity[]>> {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
-    if (!session?.user || !isSuperAdmin(session.user.role)) {
+    if (!session?.user || !canManageVenues(session.user.role)) {
       return {
         success: false,
-        message: "Only super admins can update venues.",
+        message: "Only admins can update venues.",
       };
     }
 
@@ -298,10 +301,10 @@ export async function createEventSpace(
     const session = await auth.api.getSession({
       headers: await headers(),
     });
-    if (!session?.user || !isSuperAdmin(session.user.role)) {
+    if (!session?.user || !canManageVenues(session.user.role)) {
       return {
         success: false,
-        message: "Only super admins can delete venues.",
+        message: "Only admins can create venues.",
       };
     }
 
@@ -389,10 +392,10 @@ export async function updateEventSpace(
     const session = await auth.api.getSession({
       headers: await headers(),
     });
-    if (!session?.user) {
+    if (!session?.user || !canManageVenues(session.user.role)) {
       return {
         success: false,
-        message: "Unauthorized access.",
+        message: "Only admins can update venues.",
       };
     }
 
@@ -487,10 +490,10 @@ export async function deleteEventSpace(
     const session = await auth.api.getSession({
       headers: await headers(),
     });
-    if (!session?.user) {
+    if (!session?.user || !canManageVenues(session.user.role)) {
       return {
         success: false,
-        message: "Unauthorized access.",
+        message: "Only admins can delete venues.",
       };
     }
 

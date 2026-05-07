@@ -12,6 +12,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 function calendarItems(venue: any, globalBlocks: any[]): VenueCalendarItem[] {
+  const globalBlockScope = (block: any) =>
+    block.type === "SYSTEM_MAINTENANCE"
+      ? ("MAINTENANCE" as const)
+      : ("UNIVERSITY" as const);
+
   return [
     ...(venue.sapfRequests || []).flatMap((request: any) =>
       (request.schedules || []).map((schedule: any) => ({
@@ -48,11 +53,15 @@ function calendarItems(venue: any, globalBlocks: any[]): VenueCalendarItem[] {
       (block.schedules || []).map((schedule: any) => ({
         id: schedule.id,
         title: block.title,
-        subtitle: block.reason || "University-wide block",
+        subtitle:
+          block.reason ||
+          (block.type === "SYSTEM_MAINTENANCE"
+            ? "System maintenance"
+            : "University-wide block"),
         startAt: schedule.startAt,
         endAt: schedule.endAt,
         status: "BLOCKED" as const,
-        scope: "UNIVERSITY" as const,
+        scope: globalBlockScope(block),
       })),
     ),
   ].sort(

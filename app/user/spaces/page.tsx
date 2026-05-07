@@ -31,9 +31,9 @@ const page = async () => {
   const role = session.user.role?.toUpperCase();
   const globalBlocks = blocksResult.success ? blocksResult.data || [] : [];
 
-  if (role === "SUPER_ADMIN") {
+  if (["ADMIN", "SUPER_ADMIN"].includes(role || "")) {
     return <AdminSpaces eventSpaces={result.data || []} globalBlocks={globalBlocks} />;
-  } else if (["OFFICER", "APPROVER", "ADMIN"].includes(role || "")) {
+  } else if (["OFFICER", "APPROVER"].includes(role || "")) {
     return (
       <OfficerSpaces
         eventSpaces={result.data || []}

@@ -18,6 +18,13 @@ import {
 } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/app/components/ui/select";
 import { motion } from "framer-motion";
 import {
   Building2,
@@ -39,6 +46,7 @@ type ScheduleRow = {
   startTime: string;
   endTime: string;
 };
+type BlockType = "UNIVERSITY_WIDE" | "SYSTEM_MAINTENANCE";
 
 function createScheduleRow(): ScheduleRow {
   return {
@@ -49,9 +57,10 @@ function createScheduleRow(): ScheduleRow {
   };
 }
 
-function BlockScheduleRows() {
+function BlockScheduleRows({ blockType }: { blockType: BlockType }) {
   const popup = usePopup();
   const [rows, setRows] = useState<ScheduleRow[]>([createScheduleRow()]);
+  const isUniversityBlock = blockType === "UNIVERSITY_WIDE";
 
   const updateRow = (
     rowId: string,
@@ -112,39 +121,47 @@ function BlockScheduleRows() {
             onChange={(event) => updateRow(row.id, "date", event.target.value)}
             required
           />
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label>Start</Label>
-              <Input
-                name="scheduleStartTime"
-                type="time"
-                value={row.startTime}
-                onChange={(event) =>
-                  updateRow(row.id, "startTime", event.target.value)
-                }
-                required
-              />
+          {isUniversityBlock ? (
+            <>
+              <input type="hidden" name="scheduleStartTime" value="00:00" />
+              <input type="hidden" name="scheduleEndTime" value="23:59" />
+            </>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Start</Label>
+                <Input
+                  name="scheduleStartTime"
+                  type="time"
+                  value={row.startTime}
+                  onChange={(event) =>
+                    updateRow(row.id, "startTime", event.target.value)
+                  }
+                  required
+                />
+              </div>
+              <div>
+                <Label>End</Label>
+                <Input
+                  name="scheduleEndTime"
+                  type="time"
+                  value={row.endTime}
+                  min={row.startTime || undefined}
+                  onChange={(event) =>
+                    updateRow(row.id, "endTime", event.target.value)
+                  }
+                  required
+                />
+              </div>
             </div>
-            <div>
-              <Label>End</Label>
-              <Input
-                name="scheduleEndTime"
-                type="time"
-                value={row.endTime}
-                min={row.startTime || undefined}
-                onChange={(event) =>
-                  updateRow(row.id, "endTime", event.target.value)
-                }
-                required
-              />
-            </div>
-          </div>
+          )}
         </div>
       ))}
       <Button
         type="button"
         variant="outline"
         className="w-full"
+        disabled={isUniversityBlock && rows.length >= 6}
         onClick={() => setRows((current) => [...current, createScheduleRow()])}
       >
         <Plus className="mr-2 h-4 w-4" />
@@ -164,6 +181,7 @@ export default function AdminSpaces({
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCapacity, setFilterCapacity] = useState("");
   const [showCreatePopup, setShowCreatePopup] = useState(false);
+  const [blockType, setBlockType] = useState<BlockType>("UNIVERSITY_WIDE");
   const popup = usePopup();
   const router = useRouter();
 
@@ -281,25 +299,57 @@ export default function AdminSpaces({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CalendarX className="h-5 w-5 text-violet-700" />
-              Add University Block
+              <CalendarX
+                className={
+                  blockType === "SYSTEM_MAINTENANCE"
+                    ? "h-5 w-5 text-yellow-700"
+                    : "h-5 w-5 text-violet-700"
+                }
+              />
+              Add Global Block
             </CardTitle>
             <CardDescription>
-              Block a date or time range for every venue.
+              Use dates for university-wide blocks, time ranges for maintenance.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form action={handleCreateGlobalBlock} className="space-y-3">
+              <input type="hidden" name="blockType" value={blockType} />
+              <div>
+                <Label>Block Type</Label>
+                <Select
+                  value={blockType}
+                  onValueChange={(value) => setBlockType(value as BlockType)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UNIVERSITY_WIDE">
+                      University Wide Block
+                    </SelectItem>
+                    <SelectItem value="SYSTEM_MAINTENANCE">
+                      System Maintenance
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div>
                 <Label>Title</Label>
                 <Input name="title" required />
               </div>
-              <BlockScheduleRows />
+              <BlockScheduleRows blockType={blockType} />
               <div>
                 <Label>Reason</Label>
                 <Input name="reason" />
               </div>
-              <Button className="w-full bg-violet-600 hover:bg-violet-700">
+              <Button
+                className={
+                  blockType === "SYSTEM_MAINTENANCE"
+                    ? "w-full bg-yellow-600 text-white hover:bg-yellow-700"
+                    : "w-full bg-violet-600 hover:bg-violet-700"
+                }
+              >
                 Create Block
               </Button>
             </form>

@@ -9,6 +9,10 @@ import {
   notifyOfficerForSapfWorkflow,
   notifySapfBookingUpdated,
 } from "@/lib/sapf-notification-email";
+import {
+  canBypassSystemMaintenance,
+  isSystemMaintenanceActive,
+} from "@/lib/system-maintenance";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { v4 as uuid } from "uuid";
@@ -56,6 +60,8 @@ const elevatedApprovalTimeoutPositions = new Set([
   "UNIVERSITY_PRESIDENT",
 ]);
 const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
+const ADMIN_ROLE = "ADMIN";
+const venueBlockTypes = ["UNIVERSITY_WIDE", "SYSTEM_MAINTENANCE"] as const;
 const listActiveStatuses = [
   "DRAFT",
   "SUBMITTED",
@@ -105,7 +111,11 @@ const editableRequestFieldLabels: Record<string, string> = {
   vehiclePassengers: "Vehicle passengers",
   foodPax: "Food/snacks pax",
   roomVenueDetails: "Room/venue details",
+  soundSystemQty: "Sound system quantity",
   microphoneQty: "Microphone quantity",
+  lcdProjectorQty: "LCD projector quantity",
+  longTableQty: "Table quantity",
+  chairsQty: "Chairs quantity",
   extraProvisions: "Diverse-needs provisions",
   otherSupport: "Other support requests",
   otherDetails: "Additional information",
@@ -116,6 +126,7 @@ type ApproverRoleValue = (typeof approverRoleValues)[number];
 type ApproverPositionValue = (typeof approverPositionValues)[number];
 type ExclusiveApproverPositionValue =
   (typeof exclusiveApproverPositions)[number];
+type VenueBlockTypeValue = (typeof venueBlockTypes)[number];
 type SapfDbClient = typeof prisma | Prisma.TransactionClient;
 type SapfChange = {
   field: string;
@@ -162,6 +173,10 @@ function requireRole(
 ) {
   const normalized = normalizeRole(role);
   return normalized ? allowed.includes(normalized) : false;
+}
+
+function canManageVenueBlocks(role: string | null | undefined) {
+  return requireRole(role, [ADMIN_ROLE, SUPER_ADMIN_ROLE]);
 }
 
 type CredentialTitleClient = typeof prisma | Prisma.TransactionClient;
@@ -289,6 +304,28 @@ function parseScheduleSlots(data: FormData): ScheduleSlot[] {
   }).sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
 }
 
+function parseBlockScheduleSlots(
+  data: FormData,
+  blockType: VenueBlockTypeValue,
+) {
+  if (blockType !== "UNIVERSITY_WIDE") {
+    return parseScheduleSlots(data);
+  }
+
+  const dates = data.getAll("scheduleDate").map(String);
+  return dates
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((date) => ({
+      date,
+      startTime: "00:00",
+      endTime: "23:59",
+      startAt: sapfLocalDateTime(date, "00:00"),
+      endAt: sapfLocalDateTime(date, "23:59"),
+    }))
+    .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+}
+
 function validateScheduleSlots(
   slots: ScheduleSlot[],
   options: { enforceAdvance?: boolean } = {},
@@ -342,6 +379,17 @@ function validateScheduleSlots(
   );
   if (overlappingSlotIndex >= 0) {
     throw new Error("Schedule days must not overlap each other.");
+  }
+}
+
+function validateBlockScheduleSlots(
+  slots: ScheduleSlot[],
+  blockType: VenueBlockTypeValue,
+) {
+  validateScheduleSlots(slots);
+
+  if (blockType === "UNIVERSITY_WIDE" && slots.length > 6) {
+    throw new Error("University-wide blocks can only span 1 to 6 days.");
   }
 }
 
@@ -663,6 +711,7 @@ async function detectConflicts(
       },
       select: {
         id: true,
+        type: true,
         title: true,
         schedules: {
           select: {
@@ -809,7 +858,11 @@ function buildSapfPayload(data: FormData) {
     vehiclePassengers: field(data, "vehiclePassengers"),
     foodPax: field(data, "foodPax"),
     roomVenueDetails: field(data, "roomVenueDetails"),
+    soundSystemQty: field(data, "soundSystemQty"),
     microphoneQty: field(data, "microphoneQty"),
+    lcdProjectorQty: field(data, "lcdProjectorQty"),
+    longTableQty: field(data, "longTableQty"),
+    chairsQty: field(data, "chairsQty"),
     extraProvisions: field(data, "extraProvisions"),
     otherSupport: field(data, "otherSupport"),
     otherDetails: field(data, "otherDetails"),
@@ -840,7 +893,11 @@ function sapfColumnData(sapf: ReturnType<typeof buildSapfPayload>) {
     vehiclePassengers: sapf.vehiclePassengers || null,
     foodPax: sapf.foodPax || null,
     roomVenueDetails: sapf.roomVenueDetails || null,
+    soundSystemQty: sapf.soundSystemQty || null,
     microphoneQty: sapf.microphoneQty || null,
+    lcdProjectorQty: sapf.lcdProjectorQty || null,
+    longTableQty: sapf.longTableQty || null,
+    chairsQty: sapf.chairsQty || null,
     extraProvisions: sapf.extraProvisions || null,
     otherSupport: sapf.otherSupport || null,
     otherDetails: sapf.otherDetails || null,
@@ -1215,6 +1272,7 @@ export async function getPublicCalendarData(): Promise<ActionResult<any>> {
         venueBlocks: {
           select: {
             id: true,
+            type: true,
             title: true,
             reason: true,
             schedules: {
@@ -1588,8 +1646,9 @@ export async function getSapfWorkspace(): Promise<ActionResult<any>> {
       },
     };
 
+    const canSeeAllRequests = [ADMIN_ROLE, SUPER_ADMIN_ROLE].includes(role);
     const requestWhere =
-      role === "SUPER_ADMIN"
+      canSeeAllRequests
         ? {}
         : role === "OFFICER"
           ? { officerId: user.id }
@@ -1642,7 +1701,7 @@ export async function getSapfWorkspace(): Promise<ActionResult<any>> {
               orderBy: [{ position: "asc" }, { createdAt: "desc" }],
             })
           : Promise.resolve([]),
-        role === "SUPER_ADMIN"
+        canSeeAllRequests
           ? prisma.venueBlock.findMany({
               include: {
                 eventSpace: { select: { id: true, name: true } },
@@ -1913,6 +1972,16 @@ export async function saveSapfRequest(
       return {
         success: false,
         message: "You do not have access to save this reservation request.",
+      };
+    }
+    if (
+      !canBypassSystemMaintenance(role) &&
+      (await isSystemMaintenanceActive())
+    ) {
+      return {
+        success: false,
+        message:
+          "System maintenance is active. Bookings are available again after maintenance ends.",
       };
     }
 
@@ -3922,6 +3991,7 @@ export async function createManagedAccount(
 
     const email = field(data, "email").toLowerCase();
     const title = field(data, "title");
+    const position = field(data, "position").toUpperCase();
 
     if (!email) {
       return { success: false, message: "Email is required." };
@@ -3934,6 +4004,18 @@ export async function createManagedAccount(
         success: false,
         message: "Title must be 120 characters or less.",
       };
+    }
+    if (role === "APPROVER" && !position) {
+      return { success: false, message: "Position is required." };
+    }
+    if (role === ADMIN_ROLE && position !== "SDS") {
+      return { success: false, message: "Admin accounts must use SDS position." };
+    }
+    if (
+      ["APPROVER", ADMIN_ROLE].includes(role) &&
+      !approverPositionValues.includes(position as ApproverPositionValue)
+    ) {
+      return { success: false, message: "Invalid position." };
     }
 
     await auth.api.signInMagicLink({
@@ -3958,11 +4040,33 @@ export async function createManagedAccount(
       throw new Error("Error creating user");
     }
 
-    await prisma.user.update({
-      where: { id: createdUser.user.id },
-      data: { role },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: createdUser.user.id },
+        data: { role },
+      });
+      await setCredentialAccountTitle(createdUser.user.id, title, tx);
+
+      if (["APPROVER", ADMIN_ROLE].includes(role)) {
+        await tx.approverPositionUser.upsert({
+          where: {
+            userId_position: {
+              userId: createdUser.user.id,
+              position: position as any,
+            },
+          },
+          create: {
+            id: uuid(),
+            userId: createdUser.user.id,
+            position: position as any,
+            active: true,
+          },
+          update: {
+            active: true,
+          },
+        });
+      }
     });
-    await setCredentialAccountTitle(createdUser.user.id, title);
 
     revalidatePath("/user/dashboard");
     revalidatePath("/user/accounts");
@@ -4282,13 +4386,6 @@ export async function updateManagedRole(
     if (!roleValues.includes(role as UserRoleValue)) {
       return { success: false, message: "Invalid role." };
     }
-    if (role === SUPER_ADMIN_ROLE) {
-      return {
-        success: false,
-        message:
-          "Create new super admin accounts from the create account form instead of changing an existing role.",
-      };
-    }
     if (userId === user.id) {
       return {
         success: false,
@@ -4318,7 +4415,44 @@ export async function updateManagedRole(
       data: { role },
     });
 
-    if (!approverRoleValues.includes(role as ApproverRoleValue)) {
+    if (role === SUPER_ADMIN_ROLE) {
+      await prisma.approverPositionUser.updateMany({
+        where: { userId },
+        data: { active: false },
+      });
+    } else if (role === ADMIN_ROLE) {
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: userId },
+          data: { role },
+        });
+        await tx.approverPositionUser.updateMany({
+          where: { userId },
+          data: { active: false },
+        });
+        await tx.approverPositionUser.upsert({
+          where: {
+            userId_position: {
+              userId,
+              position: "SDS" as any,
+            },
+          },
+          create: {
+            id: uuid(),
+            userId,
+            position: "SDS" as any,
+            active: true,
+          },
+          update: {
+            active: true,
+          },
+        });
+      });
+
+      revalidatePath("/user/accounts");
+      revalidatePath("/user/dashboard");
+      return { success: true, message: "Role updated." };
+    } else if (!approverRoleValues.includes(role as ApproverRoleValue)) {
       await prisma.approverPositionUser.updateMany({
         where: { userId },
         data: { active: false },
@@ -4426,6 +4560,12 @@ export async function updateApproverPosition(
       return {
         success: false,
         message: "Super admin accounts cannot have positions.",
+      };
+    }
+    if (targetRole === ADMIN_ROLE && positionInput !== "SDS") {
+      return {
+        success: false,
+        message: "Admin accounts can only use SDS position.",
       };
     }
 
@@ -4545,6 +4685,12 @@ export async function assignApproverPosition(
         message: "Super admin accounts cannot have positions.",
       };
     }
+    if (targetRole === ADMIN_ROLE && position !== "SDS") {
+      return {
+        success: false,
+        message: "Admin accounts can only use SDS position.",
+      };
+    }
 
     await prisma.approverPositionUser.upsert({
       where: {
@@ -4605,16 +4751,22 @@ export async function createVenueBlock(
 ): Promise<ActionResult<void>> {
   try {
     const user = await getSessionUser();
-    if (!user || !requireRole(user.role, ["SUPER_ADMIN"])) {
+    if (!user || !canManageVenueBlocks(user.role)) {
       return {
         success: false,
-        message: "Only super admins can block venue dates.",
+        message: "Only admins can block venue dates.",
       };
     }
 
     const eventSpaceId = field(data, "eventSpaceId");
-    const scheduleSlots = parseScheduleSlots(data);
-    validateScheduleSlots(scheduleSlots);
+    const blockTypeInput = field(data, "blockType", "UNIVERSITY_WIDE").toUpperCase();
+    const blockType = venueBlockTypes.includes(
+      blockTypeInput as VenueBlockTypeValue,
+    )
+      ? (blockTypeInput as VenueBlockTypeValue)
+      : "UNIVERSITY_WIDE";
+    const scheduleSlots = parseBlockScheduleSlots(data, blockType);
+    validateBlockScheduleSlots(scheduleSlots, blockType);
 
     if (!field(data, "title")) {
       return {
@@ -4627,6 +4779,7 @@ export async function createVenueBlock(
       data: {
         id: uuid(),
         eventSpaceId: eventSpaceId === "ALL" ? null : eventSpaceId,
+        type: blockType as any,
         title: field(data, "title"),
         reason: field(data, "reason") || null,
         createdById: user.id,
@@ -4659,10 +4812,10 @@ export async function updateUniversityWideVenueBlock(
 ): Promise<ActionResult<void>> {
   try {
     const user = await getSessionUser();
-    if (!user || !requireRole(user.role, ["SUPER_ADMIN"])) {
+    if (!user || !canManageVenueBlocks(user.role)) {
       return {
         success: false,
-        message: "Only super admins can update university-wide blocks.",
+        message: "Only admins can update global blocks.",
       };
     }
 
@@ -4682,8 +4835,14 @@ export async function updateUniversityWideVenueBlock(
       };
     }
 
-    const scheduleSlots = parseScheduleSlots(data);
-    validateScheduleSlots(scheduleSlots);
+    const blockTypeInput = field(data, "blockType", "UNIVERSITY_WIDE").toUpperCase();
+    const blockType = venueBlockTypes.includes(
+      blockTypeInput as VenueBlockTypeValue,
+    )
+      ? (blockTypeInput as VenueBlockTypeValue)
+      : "UNIVERSITY_WIDE";
+    const scheduleSlots = parseBlockScheduleSlots(data, blockType);
+    validateBlockScheduleSlots(scheduleSlots, blockType);
 
     const existing = await prisma.venueBlock.findFirst({
       where: {
@@ -4715,6 +4874,7 @@ export async function updateUniversityWideVenueBlock(
         },
         data: {
           title,
+          type: blockType as any,
           reason: field(data, "reason") || null,
           schedules: {
             createMany: {
@@ -4748,10 +4908,10 @@ export async function deleteUniversityWideVenueBlock(
 ): Promise<ActionResult<void>> {
   try {
     const user = await getSessionUser();
-    if (!user || !requireRole(user.role, ["SUPER_ADMIN"])) {
+    if (!user || !canManageVenueBlocks(user.role)) {
       return {
         success: false,
-        message: "Only super admins can delete university-wide blocks.",
+        message: "Only admins can delete global blocks.",
       };
     }
 

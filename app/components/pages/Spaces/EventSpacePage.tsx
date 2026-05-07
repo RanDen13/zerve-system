@@ -44,6 +44,11 @@ const EventSpacePage = ({
   const normalizedRole = userRole as AppRole | undefined;
   const canCreateReservation = normalizedRole === "OFFICER";
 
+  const globalBlockScope = (block: any) =>
+    block.type === "SYSTEM_MAINTENANCE"
+      ? ("MAINTENANCE" as const)
+      : ("UNIVERSITY" as const);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -100,11 +105,15 @@ const EventSpacePage = ({
         (block.schedules || []).map((schedule: any) => ({
           id: schedule.id,
           title: block.title,
-          subtitle: block.reason || "University-wide block",
+          subtitle:
+            block.reason ||
+            (block.type === "SYSTEM_MAINTENANCE"
+              ? "System maintenance"
+              : "University-wide block"),
           startAt: schedule.startAt,
           endAt: schedule.endAt,
           status: "BLOCKED" as const,
-          scope: "UNIVERSITY" as const,
+          scope: globalBlockScope(block),
         })),
       ),
     ].sort(

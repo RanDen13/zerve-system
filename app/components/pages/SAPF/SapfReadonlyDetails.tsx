@@ -402,10 +402,23 @@ export default function SapfReadonlyDetails({
                 "Room/Venue Details",
                 part2.roomVenueDetails,
               ),
+              "Sound System": supportDetail(
+                "Sound System Quantity",
+                part2.soundSystemQty,
+              ),
               Microphone: supportDetail(
                 "Microphone Quantity",
                 part2.microphoneQty,
               ),
+              "LCD Projector": supportDetail(
+                "LCD Projector Quantity",
+                part2.lcdProjectorQty,
+              ),
+              "One Long Table": supportDetail(
+                "Table Quantity",
+                part2.longTableQty,
+              ),
+              Chairs: supportDetail("Chairs Quantity", part2.chairsQty),
             }}
           />
           <ReadOnlyLongField

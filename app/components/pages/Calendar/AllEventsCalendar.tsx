@@ -19,6 +19,18 @@ function blockSubtitle(block: any, fallback: string) {
   return block.reason || fallback;
 }
 
+function blockScope(block: any) {
+  return block.type === "SYSTEM_MAINTENANCE"
+    ? ("MAINTENANCE" as const)
+    : ("UNIVERSITY" as const);
+}
+
+function globalBlockLabel(block: any) {
+  return block.type === "SYSTEM_MAINTENANCE"
+    ? "System maintenance"
+    : "University-wide block";
+}
+
 export default function AllEventsCalendar({
   venues,
   globalBlocks,
@@ -65,11 +77,11 @@ export default function AllEventsCalendar({
         (block.schedules || []).map((schedule: any) => ({
           id: `global-${block.id}-${schedule.id}`,
           title: `All venues - ${block.title}`,
-          subtitle: blockSubtitle(block, "University-wide block"),
+          subtitle: blockSubtitle(block, globalBlockLabel(block)),
           startAt: schedule.startAt,
           endAt: schedule.endAt,
           status: "BLOCKED" as const,
-          scope: "UNIVERSITY" as const,
+          scope: blockScope(block),
         })),
       ),
     ].sort(
