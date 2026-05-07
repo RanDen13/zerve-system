@@ -110,8 +110,6 @@ const EditEventSpacePopup = ({
       imageFiles.forEach((file) => formData.append("images", file));
     }
 
-    console.log("data:", Object.fromEntries(formData.entries()));
-
     const confirmed = await statusPopup.showYesNo(
       `Are you sure you want to update the event space "${eventSpace.name}"? This action cannot be undone.`,
     );

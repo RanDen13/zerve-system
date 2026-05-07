@@ -16,7 +16,7 @@ import { ArrowLeft, Eye, EyeOff, KeyRound, Lock, Mail } from "lucide-react";
 import Link from "next/link";
 import Script from "next/script";
 import { env } from "next-runtime-env";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FcGoogle } from "react-icons/fc";
 import { usePopup } from "../../Popup/PopupProvider";
 
@@ -33,7 +33,19 @@ declare global {
   interface Window {
     grecaptcha?: {
       ready(callback: () => void): void;
-      execute(siteKey: string, options: { action: string }): Promise<string>;
+      render(
+        container: HTMLElement | string,
+        parameters: {
+          sitekey: string;
+          theme?: "light" | "dark";
+          size?: "compact" | "normal";
+          callback?: (token: string) => void;
+          "expired-callback"?: () => void;
+          "error-callback"?: () => void;
+        },
+      ): number;
+      getResponse(widgetId?: number): string;
+      reset(widgetId?: number): void;
     };
   }
 }
@@ -71,23 +83,6 @@ function signInErrorMessage(errorCode: string) {
   }
 }
 
-function getRecaptchaToken() {
-  if (!recaptchaSiteKey) return Promise.resolve("");
-
-  if (!window.grecaptcha) {
-    return Promise.reject(new Error("reCAPTCHA is still loading."));
-  }
-
-  return new Promise<string>((resolve, reject) => {
-    window.grecaptcha?.ready(() => {
-      window.grecaptcha
-        ?.execute(recaptchaSiteKey, { action: "login" })
-        .then(resolve)
-        .catch(reject);
-    });
-  });
-}
-
 const Login = () => {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -96,12 +91,60 @@ const Login = () => {
   const [verifyingMagicCode, setVerifyingMagicCode] = useState(false);
   const [magicCode, setMagicCode] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [recaptchaScriptReady, setRecaptchaScriptReady] = useState(
+    !recaptchaSiteKey,
+  );
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaStatus, setCaptchaStatus] = useState<
+    "disabled" | "loading" | "ready" | "error"
+  >(recaptchaSiteKey ? "loading" : "disabled");
+  const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
+  const recaptchaWidgetIdRef = useRef<number | null>(null);
   const statusPopup = usePopup();
   const normalizedMagicCode = useMemo(
     () => normalizeMagicCode(magicCode),
     [magicCode],
   );
   const busy = loading || googleLoading || verifyingMagicCode;
+
+  useEffect(() => {
+    if (
+      !recaptchaSiteKey ||
+      !recaptchaScriptReady ||
+      !window.grecaptcha ||
+      !recaptchaContainerRef.current ||
+      recaptchaWidgetIdRef.current !== null
+    ) {
+      return;
+    }
+
+    window.grecaptcha.ready(() => {
+      if (!recaptchaContainerRef.current || recaptchaWidgetIdRef.current !== null) {
+        return;
+      }
+
+      recaptchaWidgetIdRef.current = window.grecaptcha?.render(
+        recaptchaContainerRef.current,
+        {
+          sitekey: recaptchaSiteKey,
+          callback: (token: string) => {
+            setCaptchaToken(token);
+            setCaptchaStatus("ready");
+          },
+          "expired-callback": () => {
+            setCaptchaToken("");
+            setCaptchaStatus("ready");
+          },
+          "error-callback": () => {
+            setCaptchaToken("");
+            setCaptchaStatus("error");
+          },
+        },
+      ) ?? null;
+
+      setCaptchaStatus("ready");
+    });
+  }, [recaptchaScriptReady]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -112,12 +155,42 @@ const Login = () => {
     window.history.replaceState({}, "", window.location.pathname);
   }, [statusPopup]);
 
+  function resetCaptcha() {
+    if (!recaptchaSiteKey) return;
+
+    setCaptchaToken("");
+
+    if (
+      recaptchaWidgetIdRef.current !== null &&
+      typeof window !== "undefined" &&
+      window.grecaptcha
+    ) {
+      window.grecaptcha.reset(recaptchaWidgetIdRef.current);
+    }
+  }
+
+  function getCaptchaTokenOrThrow() {
+    if (!recaptchaSiteKey) return "";
+
+    const token =
+      captchaToken ||
+      (recaptchaWidgetIdRef.current !== null && window.grecaptcha
+        ? window.grecaptcha.getResponse(recaptchaWidgetIdRef.current)
+        : "");
+
+    if (!token) {
+      throw new Error("Please complete the 'I'm not a robot' check first.");
+    }
+
+    return token;
+  }
+
   async function handleLoginSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const captchaToken = await getRecaptchaToken();
+      const solvedCaptchaToken = getCaptchaTokenOrThrow();
 
       await signIn.email(
         {
@@ -126,13 +199,14 @@ const Login = () => {
           callbackURL: "/user/dashboard",
         },
         {
-          headers: captchaToken
+          headers: solvedCaptchaToken
             ? {
-                "x-captcha-response": captchaToken,
+                "x-captcha-response": solvedCaptchaToken,
               }
             : undefined,
           onError: (ctx) => {
             statusPopup.showError(ctx.error.message || "Login failed");
+            resetCaptcha();
           },
         },
       );
@@ -140,6 +214,7 @@ const Login = () => {
       statusPopup.showError(
         error instanceof Error ? error.message : "reCAPTCHA failed to run.",
       );
+      resetCaptcha();
     } finally {
       setLoading(false);
     }
@@ -148,19 +223,33 @@ const Login = () => {
   async function handleGoogleSignIn() {
     setGoogleLoading(true);
 
-    await signIn.social(
-      {
-        provider: "google",
-        callbackURL: "/user/dashboard",
-        errorCallbackURL: "/login",
-      },
-      {
-        onError: (ctx) => {
-          statusPopup.showError(ctx.error.message || "Google sign-in failed");
-          setGoogleLoading(false);
+    try {
+      const solvedCaptchaToken = getCaptchaTokenOrThrow();
+
+      await signIn.social(
+        {
+          provider: "google",
+          callbackURL: "/user/dashboard",
+          errorCallbackURL: "/login",
         },
-      },
-    );
+        {
+          headers: {
+            "x-captcha-response": solvedCaptchaToken,
+          },
+          onError: (ctx) => {
+            statusPopup.showError(ctx.error.message || "Google sign-in failed");
+            resetCaptcha();
+            setGoogleLoading(false);
+          },
+        },
+      );
+    } catch (error) {
+      statusPopup.showError(
+        error instanceof Error ? error.message : "Google sign-in failed.",
+      );
+      resetCaptcha();
+      setGoogleLoading(false);
+    }
   }
 
   function handleMagicCodeLogin() {
@@ -185,8 +274,15 @@ const Login = () => {
     <>
       {recaptchaSiteKey && (
         <Script
-          src={`https://www.google.com/recaptcha/api.js?render=${recaptchaSiteKey}`}
+          src="https://www.google.com/recaptcha/api.js?render=explicit"
           strategy="afterInteractive"
+          onReady={() => {
+            setRecaptchaScriptReady(true);
+            setCaptchaStatus("loading");
+          }}
+          onError={() => {
+            setCaptchaStatus("error");
+          }}
         />
       )}
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-muted/40 px-4 py-10 relative overflow-hidden">
@@ -308,6 +404,34 @@ const Login = () => {
                     </button>
                   </div>
                 </div>
+
+                {recaptchaSiteKey && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">
+                      Human Check
+                    </Label>
+                    <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                      <div ref={recaptchaContainerRef} className="min-h-[78px]" />
+                      {captchaStatus === "loading" && (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Loading the human check...
+                        </p>
+                      )}
+                      {captchaStatus === "error" && (
+                        <p className="mt-2 text-xs text-destructive">
+                          reCAPTCHA could not load. Refresh the page and try
+                          again.
+                        </p>
+                      )}
+                      {captchaStatus === "ready" && !captchaToken && (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Complete the &quot;I&apos;m not a robot&quot; check
+                          before signing in.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <Button
                   type="submit"
