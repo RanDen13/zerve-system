@@ -453,12 +453,18 @@ export async function renderSapfDocx({ request }: { request: any }) {
     supportRoomVenue: marker(includes(part2.supportRequests, "Room/Venue")),
     roomVenueDetails: textField(part2.roomVenueDetails),
     supportSoundSystem: marker(includes(part2.supportRequests, "Sound System")),
+    supportSoundSystemCount: textField(part2.soundSystemQty),
     supportMicrophone: marker(includes(part2.supportRequests, "Microphone")),
     microphoneQty: textField(part2.microphoneQty),
+    supportMicrophoneCount: textField(part2.microphoneQty),
     supportLcdProjector: marker(
       includes(part2.supportRequests, "LCD Projector"),
     ),
+    supportLCdProjectorCount: textField(part2.lcdProjectorQty),
     supportLongTable: marker(includes(part2.supportRequests, "One Long Table")),
+    supportTableCount: textField(part2.longTableQty),
+    supportChairs: marker(includes(part2.supportRequests, "Chairs")),
+    supportChairsCount: textField(part2.chairsQty),
     extraProvisions: textField(part2.extraProvisions),
     otherSupport: textField(part2.otherSupport),
 

@@ -31,6 +31,7 @@ export const SUPPORT_REQUEST_OPTIONS = [
   "Microphone",
   "LCD Projector",
   "One Long Table",
+  "Chairs",
 ];
 
 function valuesFromRows(rows: any[] | undefined) {
@@ -148,7 +149,11 @@ export function getSapfParts(request: any) {
     vehiclePassengers: request.vehiclePassengers || "",
     foodPax: request.foodPax || "",
     roomVenueDetails: request.roomVenueDetails || "",
+    soundSystemQty: request.soundSystemQty || "",
     microphoneQty: request.microphoneQty || "",
+    lcdProjectorQty: request.lcdProjectorQty || "",
+    longTableQty: request.longTableQty || "",
+    chairsQty: request.chairsQty || "",
     extraProvisions: request.extraProvisions || "",
     otherSupport: request.otherSupport || "",
   };

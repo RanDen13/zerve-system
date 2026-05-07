@@ -299,11 +299,35 @@ export default function SapfBookingForm({
       defaultValue: part2.roomVenueDetails || "",
       multiline: true,
     },
+    "Sound System": {
+      name: "soundSystemQty",
+      label: "Sound System Quantity",
+      placeholder: "Enter number of sound system units needed.",
+      defaultValue: part2.soundSystemQty || "",
+    },
     Microphone: {
       name: "microphoneQty",
       label: "Microphone Quantity",
       placeholder: "Enter number of microphones needed.",
       defaultValue: part2.microphoneQty || "",
+    },
+    "LCD Projector": {
+      name: "lcdProjectorQty",
+      label: "LCD Projector Quantity",
+      placeholder: "Enter number of LCD projectors needed.",
+      defaultValue: part2.lcdProjectorQty || "",
+    },
+    "One Long Table": {
+      name: "longTableQty",
+      label: "Table Quantity",
+      placeholder: "Enter number of tables needed.",
+      defaultValue: part2.longTableQty || "",
+    },
+    Chairs: {
+      name: "chairsQty",
+      label: "Chairs Quantity",
+      placeholder: "Enter number of chairs needed.",
+      defaultValue: part2.chairsQty || "",
     },
   };
   const toggleSupportRequest = (value: string, checked: boolean) => {

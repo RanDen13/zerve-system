@@ -53,7 +53,7 @@ export type VenueCalendarItem = {
   startAt: Date | string;
   endAt: Date | string;
   status: "PENDING" | "BOOKED" | "APPROVED" | "BLOCKED";
-  scope?: "VENUE" | "UNIVERSITY";
+  scope?: "VENUE" | "UNIVERSITY" | "MAINTENANCE";
 };
 
 type NormalizedCalendarItem = Omit<VenueCalendarItem, "startAt" | "endAt"> & {
@@ -146,6 +146,9 @@ function rainLabel(weather?: CalendarWeatherDay) {
 function statusClass(item: Pick<VenueCalendarItem, "status" | "scope">) {
   if (item.scope === "UNIVERSITY") {
     return "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-200";
+  }
+  if (item.scope === "MAINTENANCE") {
+    return "border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-200";
   }
   if (item.status === "APPROVED" || item.status === "BOOKED") {
     return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200";
@@ -418,6 +421,7 @@ export default function VenueMonthCalendar({
           { label: "Booked", className: "bg-emerald-500" },
           { label: "Blocked", className: "bg-red-500" },
           { label: "University-wide", className: "bg-violet-500" },
+          { label: "Maintenance", className: "bg-yellow-500" },
         ].map((item) => (
           <span
             key={item.label}

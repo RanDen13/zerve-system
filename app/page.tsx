@@ -152,9 +152,7 @@ export default function Home() {
               variants={fadeInUp}
               className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-white/80 lg:mx-0"
             >
-              View campus venue availability, submit officer-only Zerve
-              requests, and follow every approval step from adviser to
-              completion.
+              View campus venue availability, submit ReZerve request, and follow every step from adviser to completion.
             </motion.p>
             <motion.div
               variants={fadeInUp}

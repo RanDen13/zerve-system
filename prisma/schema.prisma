@@ -132,7 +132,11 @@ model SAPFRequest {
   vehiclePassengers           String?
   foodPax                     String?
   roomVenueDetails            String?
+  soundSystemQty              String?
   microphoneQty               String?
+  lcdProjectorQty             String?
+  longTableQty                String?
+  chairsQty                   String?
   extraProvisions             String?
   otherSupport                String?
   otherDetails                String?
@@ -343,6 +347,7 @@ model ApproverPositionUser {
 model VenueBlock {
   id           String               @id
   eventSpaceId String?
+  type         VenueBlockType        @default(UNIVERSITY_WIDE)
   title        String
   reason       String?
   createdById  String?
@@ -495,6 +500,11 @@ enum EventSpaceStatus {
   ACTIVE
   INACTIVE
   UNDER_MAINTENANCE
+}
+
+enum VenueBlockType {
+  UNIVERSITY_WIDE
+  SYSTEM_MAINTENANCE
 }
 
 enum SAPFRequestStatus {

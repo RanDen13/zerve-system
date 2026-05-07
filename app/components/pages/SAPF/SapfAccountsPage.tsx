@@ -53,6 +53,9 @@ const positionOptions = [
   "VPAA",
   "UNIVERSITY_PRESIDENT",
 ] as const;
+const createPositionOptions = positionOptions.filter(
+  (option) => option !== "NONE",
+);
 const exclusivePositionOptions = [
   "SAS",
   "VPAA_ASSISTANT",
@@ -114,6 +117,8 @@ function AccountRow({
     approverRoleOptions.includes(
       role as (typeof approverRoleOptions)[number],
     ) && role !== "SUPER_ADMIN";
+  const editablePositionOptions =
+    role === "ADMIN" ? (["SDS"] as const) : positionOptions;
 
   const handleRoleChange = async (nextRole: string) => {
     if (nextRole === role) return;
@@ -138,6 +143,8 @@ function AccountRow({
 
     popup.showSuccess(result.message || "Role updated.");
     setRole(nextRole);
+    if (nextRole === "ADMIN") setPosition("SDS");
+    if (["OFFICER", "SUPER_ADMIN"].includes(nextRole)) setPosition("NONE");
     await onUpdated();
   };
 
@@ -302,7 +309,7 @@ function AccountRow({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {positionOptions.map((option) => (
+              {editablePositionOptions.map((option) => (
                 <SelectItem key={option} value={option}>
                   {option === "NONE"
                     ? "No position"
@@ -411,6 +418,11 @@ export default function SapfAccountsPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createRole, setCreateRole] = useState("OFFICER");
+  const [createPosition, setCreatePosition] = useState("");
+  const canPickCreatePosition = ["APPROVER", "ADMIN"].includes(createRole);
+  const visibleCreatePositionOptions =
+    createRole === "ADMIN" ? (["SDS"] as const) : createPositionOptions;
 
   const refresh = async () => {
     setLoading(true);
@@ -597,7 +609,14 @@ export default function SapfAccountsPage() {
                   <Label htmlFor="create-role">
                     Role <span className="text-destructive">*</span>
                   </Label>
-                  <Select name="role" defaultValue="OFFICER">
+                  <Select
+                    name="role"
+                    value={createRole}
+                    onValueChange={(nextRole) => {
+                      setCreateRole(nextRole);
+                      setCreatePosition(nextRole === "ADMIN" ? "SDS" : "");
+                    }}
+                  >
                     <SelectTrigger id="create-role" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
@@ -616,6 +635,42 @@ export default function SapfAccountsPage() {
                   <p className="text-xs text-muted-foreground">
                     Super admin accounts cannot be deleted, deactivated, or
                     demoted from the system later.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="create-position">
+                    Position{" "}
+                    {canPickCreatePosition && (
+                      <span className="text-destructive">*</span>
+                    )}
+                  </Label>
+                  <Select
+                    name="position"
+                    value={createPosition}
+                    onValueChange={setCreatePosition}
+                    disabled={!canPickCreatePosition}
+                    required={canPickCreatePosition}
+                  >
+                    <SelectTrigger id="create-position" className="w-full">
+                      <SelectValue
+                        placeholder={
+                          canPickCreatePosition
+                            ? "Choose position"
+                            : "Not required"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {visibleCreatePositionOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option.replaceAll("_", " ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Officer and super admin accounts do not need a position.
+                    Admin accounts use SDS.
                   </p>
                 </div>
                 <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">

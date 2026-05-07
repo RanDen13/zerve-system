@@ -46,3 +46,4 @@ data
 .codex*
 .pnpm-store
 db_dump.bak
+.agents

@@ -13,6 +13,10 @@ import {
   CardTitle,
 } from "@/app/components/ui/card";
 import { auth } from "@/lib/auth";
+import {
+  canBypassSystemMaintenance,
+  isSystemMaintenanceActive,
+} from "@/lib/system-maintenance";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -83,6 +87,15 @@ const page = async ({
 
   const role = session.user.role?.toUpperCase();
   const { venueId, requestId } = await searchParams;
+  if (
+    !canBypassSystemMaintenance(role) &&
+    (await isSystemMaintenanceActive())
+  ) {
+    return (
+      <ErrorCard message="System maintenance is active. Bookings are available again after maintenance ends." />
+    );
+  }
+
   if (!requestId && role !== "OFFICER") {
     return <ErrorCard message="Only officers can create bookings." />;
   }
