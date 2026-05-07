@@ -1,7 +1,10 @@
 import { normalizeSapfRequest } from "@/app/components/pages/SAPF/sapfData";
+import { getAppUrl } from "@/lib/deployment";
 import { prisma } from "@/lib/prisma";
 import { renderSapfPdf } from "@/lib/sapf-pdf";
 import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
 
 export async function GET(
   _request: Request,
@@ -57,7 +60,7 @@ export async function GET(
     );
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
+  const baseUrl = getAppUrl();
   const verifyUrl = `${baseUrl}/verify/${sapf.verificationToken}`;
   const bytes = await renderSapfPdf({
     request: normalizeSapfRequest(sapf),

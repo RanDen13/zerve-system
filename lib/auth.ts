@@ -3,13 +3,11 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { admin, captcha, magicLink } from "better-auth/plugins";
 import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { randomInt } from "node:crypto";
+import { getAppUrl } from "./deployment";
 import { sendEmail } from "./email";
 import { prisma } from "./prisma";
 
-const appUrl =
-  process.env.BETTER_AUTH_URL ||
-  process.env.NEXT_PUBLIC_URL ||
-  "http://localhost:3000";
+const appUrl = getAppUrl();
 const recaptchaSecretKey = process.env.RECAPTCHA_SECRET_KEY;
 const magicCodeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const magicCodeLength = 10;
@@ -29,7 +27,7 @@ const formatMagicCode = (token: string) =>
 export const auth = betterAuth({
   baseURL: appUrl,
   database: prismaAdapter(prisma, {
-    provider: "sqlite",
+    provider: "postgresql",
   }),
   emailAndPassword: {
     enabled: true,

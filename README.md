@@ -90,6 +90,28 @@ The Dockerfile includes build tools (`python3`, `make`, `g++`) in the runtime st
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This project now generates Prisma client code during the build so Vercel can
+compile cleanly from a fresh checkout.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Important production notes:
+
+- This project is configured for PostgreSQL in production.
+- For Prisma, set `DATABASE_URL` to the pooled runtime connection string.
+- Set `DIRECT_URL` to the non-pooled Postgres connection string for Prisma
+  migrations and other CLI work.
+- SAPF DOCX downloads work on Vercel because they are generated in-process.
+- SAPF PDF routes are resilient, but full DOCX-to-PDF conversion still depends
+  on system tools such as LibreOffice or Microsoft Word automation, which are
+  not normally available in Vercel functions.
+
+Recommended Vercel environment variables:
+
+- `DATABASE_URL`: pooled Postgres runtime URL
+- `DIRECT_URL`: direct Postgres URL for Prisma CLI/migrations
+- `BETTER_AUTH_URL`: your primary production URL
+- `NEXT_PUBLIC_URL`: same public URL used by the browser client
+- `BETTER_AUTH_SECRET`: strong random secret
+- `SMTP_*`, `SENDER_*`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` as needed
+
+If you want persistent SQLite instead, prefer the included Docker deployment
+instead of Vercel.

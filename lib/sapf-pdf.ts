@@ -314,9 +314,11 @@ async function appendVerificationPage({
 async function conversionUnavailablePreview({
   request,
   error,
+  mode,
 }: {
   request: any;
   error: unknown;
+  mode: PdfMode;
 }) {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -325,13 +327,18 @@ async function conversionUnavailablePreview({
   const errorText =
     error instanceof Error ? error.message : "Unknown conversion error.";
 
-  page.drawText("Reservation Preview Unavailable", {
+  page.drawText(
+    mode === "approved"
+      ? "Reservation PDF Unavailable"
+      : "Reservation Preview Unavailable",
+    {
     x: 48,
     y: 720,
     size: 18,
     font: bold,
     color: rgb(0.8, 0.2, 0.05),
-  });
+    },
+  );
   page.drawText(`Request No: ${request.requestNumber || "-"}`, {
     x: 48,
     y: 690,
@@ -364,7 +371,7 @@ async function conversionUnavailablePreview({
     "1. Install LibreOffice, or add soffice.exe to PATH.",
     "2. Or repair/reinstall Microsoft Word so COM automation works.",
     "3. Docker already installs LibreOffice Writer and unoconv for conversion.",
-    "4. You can still use Download DOCX for the generated reservation document.",
+    "4. On Vercel, prefer downloading the generated DOCX when PDF conversion tools are unavailable.",
   ].forEach((line, index) => {
     page.drawText(line, {
       x: 64,
@@ -410,11 +417,7 @@ export async function renderSapfPdf({
   try {
     pdfBytes = await convertDocxToPdf(docxBytes);
   } catch (error) {
-    if (mode === "preview") {
-      return conversionUnavailablePreview({ request, error });
-    }
-
-    throw error;
+    return conversionUnavailablePreview({ request, error, mode });
   }
 
   if (mode === "approved" && verifyUrl) {

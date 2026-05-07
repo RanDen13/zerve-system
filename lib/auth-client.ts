@@ -6,8 +6,13 @@ import { createAuthClient } from "better-auth/react";
 import { env } from "next-runtime-env";
 import type { auth } from "./auth";
 
+const baseUrl =
+  env("NEXT_PUBLIC_URL") ||
+  (typeof window !== "undefined" ? window.location.origin : "") ||
+  "http://localhost:3000";
+
 const authClient = createAuthClient({
-  baseURL: env("NEXT_PUBLIC_URL") || "http://localhost:3000",
+  baseURL: baseUrl,
   plugins: [inferAdditionalFields<typeof auth>(), magicLinkClient()],
 });
 
