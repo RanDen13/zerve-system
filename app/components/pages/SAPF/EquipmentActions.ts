@@ -465,7 +465,11 @@ export async function getEquipmentWorkspace(): Promise<ActionResult<any>> {
       };
     }
 
-    await sendEquipmentDueReminders();
+    try {
+      await sendEquipmentDueReminders();
+    } catch (error) {
+      console.error("Equipment reminder check failed:", error);
+    }
 
     const [items, requests] = await Promise.all([
       (prisma as any).equipmentItem.findMany({

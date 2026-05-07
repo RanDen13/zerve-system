@@ -174,14 +174,25 @@ export default function EquipmentProvisioningPage() {
 
   const refresh = async () => {
     setLoading(true);
-    const result = await getEquipmentWorkspace();
-    if (!result.success) {
-      popup.showError(result.message || "Failed to load equipment.");
+    try {
+      const result = await getEquipmentWorkspace();
+      if (!result.success) {
+        popup.showError(result.message || "Failed to load equipment.");
+        setWorkspace(null);
+        return;
+      }
+      setWorkspace(result.data);
+    } catch (error) {
+      console.error("Equipment workspace refresh failed:", error);
+      popup.showError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load equipment workspace.",
+      );
+      setWorkspace(null);
+    } finally {
       setLoading(false);
-      return;
     }
-    setWorkspace(result.data);
-    setLoading(false);
   };
 
   useEffect(() => {
