@@ -44,22 +44,29 @@ const EventSpacePage = ({
   const normalizedRole = userRole as AppRole | undefined;
   const canCreateReservation = normalizedRole === "OFFICER";
 
-  const refresh = async () => {
-    setLoading(true);
-    const spaceResult = await getEventSpaceById(id);
-    if (!spaceResult.success) {
-      statusPopup.showError(spaceResult.message || "Failed to fetch venue.");
-      setLoading(false);
-      return;
-    }
-    setEventSpace(spaceResult.data || null);
-    setLoading(false);
-  };
-
   useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    let cancelled = false;
+
+    const loadEventSpace = async () => {
+      const spaceResult = await getEventSpaceById(id);
+      if (cancelled) return;
+
+      if (!spaceResult.success) {
+        statusPopup.showError(spaceResult.message || "Failed to fetch venue.");
+        setLoading(false);
+        return;
+      }
+
+      setEventSpace(spaceResult.data || null);
+      setLoading(false);
+    };
+
+    void loadEventSpace();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, statusPopup]);
 
   const calendarItems = useMemo<VenueCalendarItem[]>(() => {
     if (!eventSpace) return [];

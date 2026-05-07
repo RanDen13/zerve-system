@@ -95,16 +95,6 @@ export default function VenueImageCarousel({
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  const getTouchCenter = (touches: TouchPointList) => {
-    let x = 0,
-      y = 0;
-    for (let i = 0; i < touches.length; i++) {
-      x += touches[i].clientX;
-      y += touches[i].clientY;
-    }
-    return { x: x / touches.length, y: y / touches.length };
-  };
-
   const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
     // Don't start drag if clicking on a button or interactive element
     const target = event.target as HTMLElement;

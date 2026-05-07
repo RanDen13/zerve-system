@@ -55,6 +55,7 @@ const elevatedApprovalTimeoutPositions = new Set([
   "VPAA",
   "UNIVERSITY_PRESIDENT",
 ]);
+const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
 const listActiveStatuses = [
   "DRAFT",
   "SUBMITTED",
@@ -167,6 +168,20 @@ type CredentialTitleClient = typeof prisma | Prisma.TransactionClient;
 
 function field(data: FormData, key: string, fallback = "") {
   return String(data.get(key) ?? fallback).trim();
+}
+
+async function hasProtectedSuperAdminTarget(userIds: string[]) {
+  if (userIds.length === 0) return false;
+
+  const protectedTarget = await prisma.user.findFirst({
+    where: {
+      id: { in: userIds },
+      role: SUPER_ADMIN_ROLE,
+    },
+    select: { id: true },
+  });
+
+  return Boolean(protectedTarget);
 }
 
 async function setCredentialAccountTitle(
@@ -3893,7 +3908,7 @@ export async function createManagedAccount(
 ): Promise<ActionResult<void>> {
   try {
     const user = await getSessionUser();
-    if (!user || !requireRole(user.role, ["SUPER_ADMIN"])) {
+    if (!user || !requireRole(user.role, [SUPER_ADMIN_ROLE])) {
       return {
         success: false,
         message: "Only super admins can create accounts.",
@@ -4090,7 +4105,7 @@ export async function deactivateAccount(
 ): Promise<ActionResult<void>> {
   try {
     const user = await getSessionUser();
-    if (!user || !requireRole(user.role, ["SUPER_ADMIN"])) {
+    if (!user || !requireRole(user.role, [SUPER_ADMIN_ROLE])) {
       return {
         success: false,
         message: "Only super admins can deactivate accounts.",
@@ -4101,6 +4116,14 @@ export async function deactivateAccount(
       return {
         success: false,
         message: "You cannot deactivate your own account.",
+      };
+    }
+
+    if (await hasProtectedSuperAdminTarget(userId)) {
+      return {
+        success: false,
+        message:
+          "Super admin accounts cannot be deactivated from the system. Remove them in code if needed.",
       };
     }
 
@@ -4145,7 +4168,7 @@ export async function reactivateAccount(
 ): Promise<ActionResult<void>> {
   try {
     const user = await getSessionUser();
-    if (!user || !requireRole(user.role, ["SUPER_ADMIN"])) {
+    if (!user || !requireRole(user.role, [SUPER_ADMIN_ROLE])) {
       return {
         success: false,
         message: "Only super admins can reactivate accounts.",
@@ -4185,7 +4208,7 @@ export async function deleteManagedAccount(
 ): Promise<ActionResult<void>> {
   try {
     const user = await getSessionUser();
-    if (!user || !requireRole(user.role, ["SUPER_ADMIN"])) {
+    if (!user || !requireRole(user.role, [SUPER_ADMIN_ROLE])) {
       return {
         success: false,
         message: "Only super admins can delete accounts.",
@@ -4205,11 +4228,19 @@ export async function deleteManagedAccount(
 
     const target = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true },
+      select: { id: true, role: true },
     });
 
     if (!target) {
       return { success: false, message: "Account not found." };
+    }
+
+    if (target.role?.toUpperCase() === SUPER_ADMIN_ROLE) {
+      return {
+        success: false,
+        message:
+          "Super admin accounts cannot be deleted from the system. Remove them in code if needed.",
+      };
     }
 
     await auth.api.removeUser({
@@ -4236,7 +4267,7 @@ export async function updateManagedRole(
 ): Promise<ActionResult<void>> {
   try {
     const user = await getSessionUser();
-    if (!user || !requireRole(user.role, ["SUPER_ADMIN"])) {
+    if (!user || !requireRole(user.role, [SUPER_ADMIN_ROLE])) {
       return {
         success: false,
         message: "Only super admins can change roles.",
@@ -4251,10 +4282,34 @@ export async function updateManagedRole(
     if (!roleValues.includes(role as UserRoleValue)) {
       return { success: false, message: "Invalid role." };
     }
+    if (role === SUPER_ADMIN_ROLE) {
+      return {
+        success: false,
+        message:
+          "Create new super admin accounts from the create account form instead of changing an existing role.",
+      };
+    }
     if (userId === user.id) {
       return {
         success: false,
         message: "You cannot change your own role.",
+      };
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    if (!targetUser) {
+      return { success: false, message: "User not found." };
+    }
+
+    if (targetUser.role?.toUpperCase() === SUPER_ADMIN_ROLE) {
+      return {
+        success: false,
+        message:
+          "Super admin accounts cannot be demoted from the system. Change the code or database directly if needed.",
       };
     }
 

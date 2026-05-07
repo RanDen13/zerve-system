@@ -103,6 +103,7 @@ function AccountRow({
   const [position, setPosition] = useState(
     user.approverPositions?.[0]?.position || "NONE",
   );
+  const isProtectedSuperAdmin = !isSelf && user.role === "SUPER_ADMIN";
   const [savingRole, setSavingRole] = useState(false);
   const [savingPosition, setSavingPosition] = useState(false);
   const [savingAction, setSavingAction] = useState(false);
@@ -116,9 +117,11 @@ function AccountRow({
 
   const handleRoleChange = async (nextRole: string) => {
     if (nextRole === role) return;
-    const confirmed = await popup.showWarning(
-      `Change ${user.name}'s role to ${nextRole.replaceAll("_", " ")}?`,
-    );
+    const warningMessage =
+      nextRole === "SUPER_ADMIN"
+        ? `You are about to give ${user.name} full super admin access. This role has the same level of control as your account and cannot be demoted from the system later. Continue?`
+        : `Change ${user.name}'s role to ${nextRole.replaceAll("_", " ")}?`;
+    const confirmed = await popup.showWarning(warningMessage);
     if (!confirmed) return;
 
     setSavingRole(true);
@@ -275,7 +278,7 @@ function AccountRow({
           <Select
             value={role}
             onValueChange={handleRoleChange}
-            disabled={savingRole || isSelf}
+            disabled={savingRole || isSelf || isProtectedSuperAdmin}
           >
             <SelectTrigger className="h-9 w-[180px]">
               <SelectValue />
@@ -329,13 +332,17 @@ function AccountRow({
               {user.status === "PENDING" && (
                 <SelectItem value="RESEND_MAGIC">Resend magic code</SelectItem>
               )}
-              {!isSelf && user.status !== "INACTIVE" && (
+              {!isSelf &&
+                !isProtectedSuperAdmin &&
+                user.status !== "INACTIVE" && (
                 <SelectItem value="DEACTIVATE">Deactivate account</SelectItem>
               )}
-              {!isSelf && user.status === "INACTIVE" && (
+              {!isSelf &&
+                !isProtectedSuperAdmin &&
+                user.status === "INACTIVE" && (
                 <SelectItem value="ACTIVATE">Activate account</SelectItem>
               )}
-              {!isSelf && (
+              {!isSelf && !isProtectedSuperAdmin && (
                 <SelectItem value="DELETE" className="text-destructive">
                   Delete account
                 </SelectItem>
@@ -425,6 +432,14 @@ export default function SapfAccountsPage() {
   }, []);
 
   const handleCreate = async (formData: FormData) => {
+    const role = String(formData.get("role") || "").toUpperCase();
+    if (role === "SUPER_ADMIN") {
+      const confirmed = await popup.showWarning(
+        "You are creating another super admin account. This account will have the same access level as you and cannot be deleted, deactivated, or demoted from the system later. Continue?",
+      );
+      if (!confirmed) return;
+    }
+
     setCreating(true);
     const result = await createManagedAccount(formData);
     setCreating(false);
@@ -560,10 +575,14 @@ export default function SapfAccountsPage() {
                     id="create-email"
                     name="email"
                     type="email"
-                    placeholder="e.g., juan@lcu.edu.ph"
+                    placeholder="e.g., juan@example.com"
                     autoComplete="email"
                     required
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Use the email address where this user should receive their
+                    magic code.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="create-title">Title</Label>
@@ -593,6 +612,10 @@ export default function SapfAccountsPage() {
                   <p className="text-xs text-muted-foreground">
                     Roles control access to approvals, settings, and system
                     actions.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Super admin accounts cannot be deleted, deactivated, or
+                    demoted from the system later.
                   </p>
                 </div>
                 <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
