@@ -39,6 +39,21 @@ type SapfUpdateEmail = {
   }>;
 };
 
+type DirectWorkflowEmail = {
+  requestId: string;
+  userId: string;
+  title: string;
+  headline: string;
+  message: string;
+  statusLabel: string;
+  tone: WorkflowTone;
+  detailPath: string;
+  eyebrow?: string;
+  comment?: string | null;
+  actorName?: string | null;
+  actionLabel?: string;
+};
+
 const appUrl =
   process.env.BETTER_AUTH_URL ||
   process.env.NEXT_PUBLIC_URL ||
@@ -334,6 +349,79 @@ export async function notifyOfficerForSapfWorkflow({
     });
   } catch (error) {
     console.error("Failed to send officer SAPF email:", error);
+  }
+}
+
+export async function notifyUserForSapfWorkflow({
+  requestId,
+  userId,
+  title,
+  headline,
+  message,
+  statusLabel,
+  tone,
+  detailPath,
+  eyebrow = "Workflow update",
+  comment,
+  actorName,
+  actionLabel = "Open Reservation",
+}: DirectWorkflowEmail) {
+  try {
+    const [request, recipient] = await Promise.all([
+      getRequestForEmail(requestId),
+      prisma.user.findUnique({ where: { id: userId } }),
+    ]);
+
+    if (!request || !recipient || !canReceiveWorkflowEmail(recipient)) return;
+    const recipientEmail = recipient.email;
+    if (!recipientEmail) return;
+
+    const detailUrl = absoluteUrl(detailPath);
+    const rows: Array<[string, string]> = [
+      ["Request No.", escapeHtml(request.requestNumber)],
+      ["Activity", escapeHtml(request.title)],
+      ["Organization", escapeHtml(request.organization)],
+      ["Venue", escapeHtml(venueText(request))],
+      ["Schedule", formatSchedule(request)],
+      ["Updated By", escapeHtml(actorName || "Zerve")],
+    ];
+    const subject = `[Zerve] ${request.requestNumber} ${title}`;
+    const html = emailLayout({
+      preview: `${request.requestNumber}: ${statusLabel}`,
+      eyebrow,
+      headline,
+      message,
+      badge: statusLabel,
+      tone,
+      rows,
+      ctaHref: detailUrl,
+      ctaLabel: actionLabel,
+      comment,
+    });
+    const text = [
+      headline,
+      "",
+      message,
+      "",
+      `Request No: ${request.requestNumber}`,
+      `Activity: ${request.title}`,
+      `Organization: ${request.organization}`,
+      `Venue: ${venueText(request)}`,
+      actorName ? `Updated by: ${actorName}` : "",
+      comment ? `Note: ${comment}` : "",
+      `Details: ${detailUrl}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    await sendSapfWorkflowEmail({
+      to: recipientEmail,
+      subject,
+      html,
+      text,
+    });
+  } catch (error) {
+    console.error("Failed to send direct SAPF workflow email:", error);
   }
 }
 

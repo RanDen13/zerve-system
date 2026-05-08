@@ -118,7 +118,7 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/75" />
         <div className="absolute inset-x-0 bottom-0 h-32 bg-linear-to-t from-background to-transparent" />
 
-        <div className="absolute right-4 top-4 z-20 flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70 backdrop-blur">
+        <div className="absolute right-4 top-4 z-20 flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-normal text-white/70 backdrop-blur">
           Theme
           <div className="text-foreground">
             <ModeToggle />
@@ -137,7 +137,7 @@ export default function Home() {
           >
             <motion.p
               variants={fadeInUp}
-              className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200 backdrop-blur"
+              className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-normal text-emerald-200 backdrop-blur"
             >
               <AppLogo className="h-4 w-4 shrink-0" variant="light" />
               <span>Zerve</span>
@@ -269,7 +269,7 @@ export default function Home() {
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
         >
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          <h2 className="text-3xl font-bold tracking-normal sm:text-4xl">
             Built around the Zerve approval workflow.
           </h2>
           <p className="mt-3 text-lg text-muted-foreground">

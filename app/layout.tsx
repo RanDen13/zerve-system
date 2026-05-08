@@ -1,4 +1,5 @@
 import PopupProvider from "@/app/components/Popup/PopupProvider";
+import NetworkStatus from "@/app/components/NetworkStatus";
 import { ThemeProvider } from "@/app/components/theme-provider";
 import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
@@ -40,21 +41,26 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("font-serif", ebGaramond.variable)}
+      className={cn(
+        geistSans.variable,
+        geistMono.variable,
+        ebGaramond.variable,
+      )}
     >
       <head>
         <PublicEnvScript />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="min-h-screen antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          <PopupProvider>{children}</PopupProvider>
+          <PopupProvider>
+            {children}
+            <NetworkStatus />
+          </PopupProvider>
         </ThemeProvider>
       </body>
     </html>

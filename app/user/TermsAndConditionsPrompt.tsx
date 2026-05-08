@@ -35,7 +35,7 @@ export default function TermsAndConditionsPrompt({
   if (accepted) return null;
 
   return (
-    <ModalBase>
+    <ModalBase ariaLabel="Terms and conditions">
       <div className="w-[min(92vw,560px)] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-2xl">
         <div className="flex items-start gap-4 border-b border-border bg-muted/40 px-6 py-5">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">

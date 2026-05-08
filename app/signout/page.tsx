@@ -45,36 +45,8 @@ export default function SignOutPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-muted/40 px-4 py-10 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-20 -left-20 w-72 h-72 bg-primary/20 rounded-full opacity-30 blur-3xl"
-          animate={{
-            y: [0, 50, 0],
-            x: [0, 30, 0],
-          }}
-          transition={{
-            duration: 15,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-        <motion.div
-          className="absolute bottom-20 -right-20 w-96 h-96 bg-secondary/50 rounded-full opacity-30 blur-3xl"
-          animate={{
-            y: [0, -50, 0],
-            x: [0, -30, 0],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-      </div>
-
-      <div className="w-full max-w-md relative z-10">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10">
+      <div className="relative z-10 w-full max-w-md">
         <motion.div
           initial="hidden"
           animate="visible"
@@ -89,12 +61,12 @@ export default function SignOutPage() {
                 transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
                 className="inline-block mx-auto"
               >
-                <div className="w-16 h-16 bg-gradient-to-br from-destructive to-orange-500 rounded-2xl flex items-center justify-center shadow-lg">
-                  <LogOut className="w-8 h-8 text-white" />
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-destructive/30 bg-destructive/10 shadow-sm">
+                  <LogOut className="h-8 w-8 text-destructive" />
                 </div>
               </motion.div>
               <div>
-                <p className="text-xs font-semibold tracking-[0.25em] uppercase text-primary mb-2">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-normal text-primary">
                   Zerve
                 </p>
                 <CardTitle className="text-2xl sm:text-3xl font-bold">

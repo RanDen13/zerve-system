@@ -17,33 +17,34 @@ const SuccessPopup = ({
   redirectTo,
 }: SuccessScreenProps) => {
   return (
-    <ModalBase>
-      <Card className="max-w-md w-full shadow-lg border border-emerald-200/50 bg-card">
+    <ModalBase onClose={onClose} ariaLabel="Success message">
+      <Card className="w-[min(92vw,28rem)] border border-emerald-200/50 bg-card shadow-lg">
         <CardContent className="pt-6">
-          <div className="flex flex-col items-center text-center gap-4">
-            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-200/50">
-              <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-emerald-200/50 bg-emerald-500/10">
+              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-bold text-emerald-500 uppercase tracking-wider">
+              <p className="text-sm font-bold uppercase tracking-normal text-emerald-500">
                 Success
               </p>
               {message && (
-                <p className="text-sm text-muted-foreground wrap-break-words max-w-xs">
+                <p className="max-w-xs break-words text-sm leading-6 text-muted-foreground">
                   {message}
                 </p>
               )}
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full mt-2">
+            <div className="mt-2 flex w-full flex-col gap-2 sm:flex-row">
               {redirectTo ? (
-                <Link href={redirectTo} className="w-full">
-                  <Button
-                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                    onClick={onClose}
-                  >
+                <Button
+                  asChild
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={onClose}
+                >
+                  <Link href={redirectTo}>
                     Close
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               ) : (
                 <Button
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"

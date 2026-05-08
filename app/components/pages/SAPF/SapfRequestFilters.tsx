@@ -153,6 +153,12 @@ export function SapfRequestFilters({
 }) {
   const hasFilters =
     value.query || value.status !== "ALL" || value.dateFrom || value.dateTo;
+  const activeFilterCount = [
+    value.query,
+    value.status !== "ALL",
+    value.dateFrom,
+    value.dateTo,
+  ].filter(Boolean).length;
 
   const update = (patch: Partial<SapfRequestFilterState>) => {
     onChange({ ...value, ...patch });
@@ -160,6 +166,22 @@ export function SapfRequestFilters({
 
   return (
     <div className="rounded-lg border bg-muted/30 p-4">
+      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Filter requests</p>
+          <p className="text-xs text-muted-foreground">
+            Showing {resultCount} of {totalCount} request
+            {totalCount === 1 ? "" : "s"}.
+          </p>
+        </div>
+        {activeFilterCount > 0 && (
+          <p className="text-xs font-medium text-primary">
+            {activeFilterCount} active filter
+            {activeFilterCount === 1 ? "" : "s"}
+          </p>
+        )}
+      </div>
+
       <div className="grid gap-3 lg:grid-cols-[1.5fr_0.8fr_0.8fr_0.8fr_auto] lg:items-end">
         <div className="space-y-2">
           <Label htmlFor="sapf-search">Search</Label>
@@ -167,6 +189,7 @@ export function SapfRequestFilters({
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               id="sapf-search"
+              type="search"
               value={value.query}
               onChange={(event) => update({ query: event.target.value })}
               placeholder="Title, request no., officer, venue, department..."
@@ -176,12 +199,12 @@ export function SapfRequestFilters({
         </div>
 
         <div className="space-y-2">
-          <Label>Status</Label>
+          <Label htmlFor="sapf-status">Status</Label>
           <Select
             value={value.status}
             onValueChange={(status) => update({ status })}
           >
-            <SelectTrigger className="w-full bg-background">
+            <SelectTrigger id="sapf-status" className="w-full bg-background">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -228,10 +251,6 @@ export function SapfRequestFilters({
           Clear
         </Button>
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        Showing {resultCount} of {totalCount} request
-        {totalCount === 1 ? "" : "s"}.
-      </p>
     </div>
   );
 }

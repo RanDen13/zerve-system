@@ -15,44 +15,45 @@ const YesNoPopup = ({
   warning?: boolean;
 }) => {
   return (
-    <ModalBase>
-      <Card className="max-w-md w-full shadow-lg border border-border bg-card">
+    <ModalBase onClose={onNo} ariaLabel="Confirm action">
+      <Card className="w-[min(92vw,28rem)] border border-border bg-card shadow-lg">
         <CardContent className="pt-6">
-          <div className="flex flex-col items-center text-center gap-4">
+          <div className="flex flex-col items-center gap-4 text-center">
             <div
-              className={`flex items-center justify-center w-16 h-16 rounded-full border-2 ${
+              className={`flex h-16 w-16 items-center justify-center rounded-full border-2 ${
                 warning
-                  ? "bg-amber-500/10 border-amber-200/60"
-                  : "bg-primary/10 border-primary/30"
+                  ? "border-amber-200/60 bg-amber-500/10"
+                  : "border-primary/30 bg-primary/10"
               }`}
             >
               {warning ? (
-                <AlertTriangle className="w-8 h-8 text-amber-500" />
+                <AlertTriangle className="h-8 w-8 text-amber-500" />
               ) : (
-                <HelpCircle className="w-8 h-8 text-primary" />
+                <HelpCircle className="h-8 w-8 text-primary" />
               )}
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-bold uppercase tracking-wider text-foreground">
+              <p className="text-sm font-bold uppercase tracking-normal text-foreground">
                 Confirm action
               </p>
-              <p className="text-sm text-muted-foreground wrap-break-words max-w-xs">
+              <p className="max-w-xs break-words text-sm leading-6 text-muted-foreground">
                 {message || "Are you sure?"}
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row items-center justify-stretch gap-2 w-full mt-2">
+            <div className="mt-2 flex w-full flex-col items-center justify-stretch gap-2 sm:flex-row">
               <Button
-                className="sm:flex-1 w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                variant={warning ? "destructive" : "default"}
+                className="w-full sm:flex-1"
                 onClick={onYes}
               >
-                Yes
+                Continue
               </Button>
               <Button
                 variant="outline"
-                className="sm:flex-1 w-full"
+                className="w-full sm:flex-1"
                 onClick={onNo}
               >
-                No
+                Cancel
               </Button>
             </div>
           </div>

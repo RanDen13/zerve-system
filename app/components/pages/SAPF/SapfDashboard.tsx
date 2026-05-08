@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  EmptyState,
+  ErrorStateCard,
+  PageHeader,
+  PageShell,
+  StatCard,
+} from "@/app/components/UX";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -12,18 +19,20 @@ import {
 import {
   MotionItem,
   MotionList,
-  MotionPage,
   MotionSection,
 } from "@/app/components/ui/motion";
 import { format } from "date-fns";
 import {
   Bell,
+  Building2,
   CheckCircle,
+  CirclePlus,
   Clock,
   History,
   Loader2,
   MessageSquare,
   RefreshCcw,
+  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -101,15 +110,11 @@ export default function SapfDashboard() {
 
   if (!workspace) {
     return (
-      <div className="p-4 lg:p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Workspace unavailable</CardTitle>
-            <CardDescription>
-              We could not load your reservation workspace.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <PageShell>
+        <ErrorStateCard
+          title="Workspace unavailable"
+          description="We could not load your reservation workspace."
+          action={
             <Button onClick={refresh} variant="outline" disabled={loading}>
               {loading ? (
                 <ButtonSpinner />
@@ -118,9 +123,9 @@ export default function SapfDashboard() {
               )}
               {loading ? "Loading..." : "Try again"}
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          }
+        />
+      </PageShell>
     );
   }
 
@@ -137,74 +142,122 @@ export default function SapfDashboard() {
     workspace.me.role === "OFFICER"
       ? `/user/bookings/${requestId}`
       : `/user/approvals/${requestId}`;
+  const quickActions = [
+    ...(workspace.me.role === "OFFICER"
+      ? [
+          {
+            href: "/user/bookings/create",
+            title: "Create a booking",
+            description: "Start a venue reservation and save drafts before submitting.",
+            icon: <CirclePlus className="h-5 w-5" />,
+          },
+          {
+            href: "/user/spaces",
+            title: "Browse venues",
+            description: "Compare venue capacity, availability, and booking rules.",
+            icon: <Building2 className="h-5 w-5" />,
+          },
+        ]
+      : [
+          {
+            href: "/user/approvals",
+            title: "Review approvals",
+            description: "Open requests that need your decision or follow-up.",
+            icon: <ShieldCheck className="h-5 w-5" />,
+          },
+        ]),
+    {
+      href: "/user/bookings",
+      title: "View booking records",
+      description: "Search pending, followed, and history records.",
+      icon: <History className="h-5 w-5" />,
+    },
+  ];
 
   return (
-    <MotionPage className="space-y-8 p-4 lg:p-8">
-      <MotionSection className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">
-            Zerve Workspace
-          </h1>
-          <p className="text-muted-foreground">
+    <PageShell>
+      <MotionSection>
+        <PageHeader
+          title="Zerve Workspace"
+          description={
+            <>
             Signed in as {workspace.me.name} -{" "}
             {workspace.me.role.replaceAll("_", " ")}
-          </p>
-        </div>
-        <Button onClick={refresh} variant="outline" disabled={loading}>
-          {loading ? (
-            <ButtonSpinner />
-          ) : (
-            <RefreshCcw className="mr-2 h-4 w-4" />
-          )}
-          {loading ? "Refreshing..." : "Refresh"}
-        </Button>
+            </>
+          }
+          actions={
+            <Button onClick={refresh} variant="outline" disabled={loading}>
+              {loading ? (
+                <ButtonSpinner />
+              ) : (
+                <RefreshCcw className="h-4 w-4" />
+              )}
+              {loading ? "Refreshing..." : "Refresh"}
+            </Button>
+          }
+        />
       </MotionSection>
 
-      <MotionList className="grid gap-4 md:grid-cols-4" data-tour="dashboard-summary">
+      <MotionList className="dashboard-grid" data-tour="dashboard-summary">
         <MotionItem>
-        <Card className="panel-hover">
-          <CardContent className="flex items-center gap-4 p-5">
-            <Clock className="h-8 w-8 text-blue-600" />
-            <div>
-              <p className="text-2xl font-bold">{stats.current}</p>
-              <p className="text-sm text-muted-foreground">Current</p>
-            </div>
-          </CardContent>
-        </Card>
+          <StatCard
+            label="Current"
+            value={stats.current}
+            description="Active requests in progress"
+            href="/user/bookings"
+            actionLabel="Open"
+            icon={<Clock className="h-5 w-5" />}
+            tone="info"
+          />
         </MotionItem>
         <MotionItem>
-        <Card className="panel-hover">
-          <CardContent className="flex items-center gap-4 p-5">
-            <History className="h-8 w-8 text-muted-foreground" />
-            <div>
-              <p className="text-2xl font-bold">{stats.history}</p>
-              <p className="text-sm text-muted-foreground">History</p>
-            </div>
-          </CardContent>
-        </Card>
+          <StatCard
+            label="History"
+            value={stats.history}
+            description="Completed, rejected, and cancelled"
+            href="/user/bookings"
+            actionLabel="View"
+            icon={<History className="h-5 w-5" />}
+            tone="muted"
+          />
         </MotionItem>
         <MotionItem>
-        <Card className="panel-hover">
-          <CardContent className="flex items-center gap-4 p-5">
-            <CheckCircle className="h-8 w-8 text-emerald-600" />
-            <div>
-              <p className="text-2xl font-bold">{stats.approved}</p>
-              <p className="text-sm text-muted-foreground">Approved</p>
-            </div>
-          </CardContent>
-        </Card>
+          <StatCard
+            label="Approved"
+            value={stats.approved}
+            description="Reservations ready or completed"
+            href="/user/bookings"
+            actionLabel="Review"
+            icon={<CheckCircle className="h-5 w-5" />}
+            tone="success"
+          />
         </MotionItem>
         <MotionItem>
-        <Card className="panel-hover">
-          <CardContent className="flex items-center gap-4 p-5">
-            <MessageSquare className="h-8 w-8 text-orange-600" />
-            <div>
-              <p className="text-2xl font-bold">{stats.conversations}</p>
-              <p className="text-sm text-muted-foreground">Private threads</p>
-            </div>
-          </CardContent>
-        </Card>
+          <StatCard
+            label="Private threads"
+            value={stats.conversations}
+            description="Concern threads that may need replies"
+            href="/user/bookings"
+            actionLabel="Check"
+            icon={<MessageSquare className="h-5 w-5" />}
+            tone="warning"
+          />
         </MotionItem>
+      </MotionList>
+
+      <MotionList className="grid gap-4 md:grid-cols-3">
+        {quickActions.map((action) => (
+          <MotionItem key={action.href}>
+            <StatCard
+              label={action.title}
+              value=""
+              description={action.description}
+              href={action.href}
+              actionLabel="Go"
+              icon={action.icon}
+            />
+          </MotionItem>
+        ))}
       </MotionList>
 
       <MotionList className="grid gap-4 md:grid-cols-2">
@@ -265,9 +318,21 @@ export default function SapfDashboard() {
         </CardHeader>
         <CardContent className="space-y-4">
           {currentRequests.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No active venue reservation requests right now.
-            </p>
+            <EmptyState
+              title="No active requests"
+              description="There are no venue reservations currently moving through the approval flow."
+              action={
+                workspace.me.role === "OFFICER" ? (
+                  <Button asChild>
+                    <Link href="/user/bookings/create">Create booking</Link>
+                  </Button>
+                ) : (
+                  <Button asChild variant="outline">
+                    <Link href="/user/approvals">Open approvals</Link>
+                  </Button>
+                )
+              }
+            />
           ) : (
             <MotionList className="space-y-4">
             {currentRequests.map((request: any) => (
@@ -286,17 +351,26 @@ export default function SapfDashboard() {
       </Card>
       </MotionSection>
 
-      {workspace.notifications.length > 0 && (
-        <MotionSection>
+      <MotionSection>
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5" />
               Notifications
             </CardTitle>
+            <CardDescription>
+              Recent workflow updates that may need your attention.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <MotionList className="grid gap-3 md:grid-cols-2">
+            {workspace.notifications.length === 0 ? (
+              <EmptyState
+                title="No new notifications"
+                description="Important workflow updates will appear here."
+                icon={<Bell className="h-6 w-6" />}
+              />
+            ) : (
+              <MotionList className="grid gap-3 md:grid-cols-2">
             {workspace.notifications.map((notification: any) => (
               <MotionItem key={notification.id} className="rounded-lg border bg-background/60 p-3 shadow-xs">
                 <p className="text-sm font-semibold">{notification.title}</p>
@@ -321,11 +395,11 @@ export default function SapfDashboard() {
                 </div>
               </MotionItem>
             ))}
-            </MotionList>
+              </MotionList>
+            )}
           </CardContent>
         </Card>
-        </MotionSection>
-      )}
-    </MotionPage>
+      </MotionSection>
+    </PageShell>
   );
 }

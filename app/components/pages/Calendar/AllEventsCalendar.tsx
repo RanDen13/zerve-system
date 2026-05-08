@@ -14,7 +14,7 @@ function requestSubtitle(request: any) {
     request.status?.replaceAll("_", " "),
   ]
     .filter(Boolean)
-    .join(" • ");
+    .join(" - ");
 }
 
 function requestTitle(request: any) {

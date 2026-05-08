@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  EmptyState,
+  ErrorStateCard,
+  InlineLoadingState,
+  PageHeader,
+  PageShell,
+  StatusBadge,
+} from "@/app/components/UX";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -50,7 +58,13 @@ function ApprovalRequestList({
   };
 }) {
   if (requests.length === 0) {
-    return <p className="text-sm text-muted-foreground">{empty}</p>;
+    return (
+      <EmptyState
+        title="No approvals found"
+        description={empty}
+        icon={<CheckCircle className="h-6 w-6" />}
+      />
+    );
   }
 
   return requests.map((request: any) => (
@@ -141,9 +155,9 @@ export default function SapfApprovalsPage() {
     {
       value: "history",
       label: "Old approvals",
-      shortLabel: "Old",
+      shortLabel: "History",
       icon: <History className="h-4 w-4" />,
-      empty: "No old approvals match your filters.",
+      empty: "No approval history records match your filters.",
     },
   ];
 
@@ -153,15 +167,11 @@ export default function SapfApprovalsPage() {
 
   if (!me) {
     return (
-      <div className="p-4 lg:p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Approvals unavailable</CardTitle>
-            <CardDescription>
-              We could not load your approval queue.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <PageShell>
+        <ErrorStateCard
+          title="Approvals unavailable"
+          description="We could not load your approval queue."
+          action={
             <Button onClick={refresh} variant="outline" disabled={Boolean(loadingTab)}>
               {loadingTab ? (
                 <ButtonSpinner />
@@ -170,30 +180,28 @@ export default function SapfApprovalsPage() {
               )}
               {loadingTab ? "Loading..." : "Try again"}
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          }
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-8 p-4 lg:p-8">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Approvals</h1>
-          <p className="text-muted-foreground">
-            Requests waiting for your approval.
-          </p>
-        </div>
-        <Button onClick={refresh} variant="outline" disabled={Boolean(loadingTab)}>
-          {loadingTab ? (
-            <ButtonSpinner />
-          ) : (
-            <RefreshCcw className="mr-2 h-4 w-4" />
-          )}
-          {loadingTab ? "Refreshing..." : "Refresh"}
-        </Button>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Approvals"
+        description="Review active requests, follow workflow progress, and audit completed decisions."
+        actions={
+          <Button onClick={refresh} variant="outline" disabled={Boolean(loadingTab)}>
+            {loadingTab ? (
+              <ButtonSpinner />
+            ) : (
+              <RefreshCcw className="h-4 w-4" />
+            )}
+            {loadingTab ? "Refreshing..." : "Refresh"}
+          </Button>
+        }
+      />
 
       {me.role === "OFFICER" ? (
         <Card>
@@ -223,6 +231,11 @@ export default function SapfApprovalsPage() {
               <TabsTrigger key={item.value} value={item.value}>
                 {item.icon}
                 {item.shortLabel}
+                <StatusBadge
+                  label={String(tabRequests[item.value]?.length ?? 0)}
+                  tone={activeTab === item.value ? "default" : "muted"}
+                  className="ml-1 px-1.5 py-0 text-[10px]"
+                />
               </TabsTrigger>
             ))}
           </TabsList>
@@ -243,13 +256,10 @@ export default function SapfApprovalsPage() {
             <TabsContent key={item.value} value={item.value}>
               <div className="space-y-4">
                 {loadingTab === item.value ? (
-                  <Card>
-                    <CardContent className="py-6">
-                      <p className="text-sm text-muted-foreground">
-                        Loading...
-                      </p>
-                    </CardContent>
-                  </Card>
+                  <InlineLoadingState
+                    label="Loading approvals"
+                    description="Fetching the latest approval records."
+                  />
                 ) : (
                   <ApprovalRequestList
                     requests={filteredRequests}
@@ -266,6 +276,6 @@ export default function SapfApprovalsPage() {
           ))}
         </Tabs>
       )}
-    </div>
+    </PageShell>
   );
 }

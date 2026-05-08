@@ -1,5 +1,6 @@
 "use client";
 
+import AppLogo from "@/app/components/AppLogo";
 import { Button } from "@/app/components/ui/button";
 import {
   Card,
@@ -297,36 +298,8 @@ const Login = () => {
           }}
         />
       )}
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-muted/40 px-4 py-10 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-20 -left-20 w-72 h-72 bg-primary/20 rounded-full opacity-30 blur-3xl"
-          animate={{
-            y: [0, 50, 0],
-            x: [0, 30, 0],
-          }}
-          transition={{
-            duration: 15,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-        <motion.div
-          className="absolute bottom-20 -right-20 w-96 h-96 bg-secondary/50 rounded-full opacity-30 blur-3xl"
-          animate={{
-            y: [0, -50, 0],
-            x: [0, -30, 0],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-      </div>
-
-      <div className="w-full max-w-md relative z-10">
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10">
+      <div className="relative z-10 w-full max-w-md">
         <motion.div
           initial="hidden"
           animate="visible"
@@ -336,18 +309,16 @@ const Login = () => {
           <Card className="border border-border/60 shadow-xl backdrop-blur-sm bg-card/90">
             <CardHeader className="text-center space-y-4 pb-8">
               <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-                className="inline-block mx-auto"
+                initial={{ scale: 0.96, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
+                className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border bg-background p-2 shadow-sm"
               >
-                <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/70 rounded-2xl flex items-center justify-center shadow-lg">
-                  <Lock className="w-8 h-8 text-white" />
-                </div>
+                <AppLogo className="h-full w-full" variant="adaptive" priority />
               </motion.div>
               <div>
-                <CardTitle className="text-3xl font-bold bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent">
-                  Welcome Back
+                <CardTitle className="text-3xl font-bold text-foreground">
+                  Welcome back
                 </CardTitle>
                 <CardDescription className="text-base mt-2 text-muted-foreground">
                   Sign in to access your Zerve account
@@ -377,6 +348,7 @@ const Login = () => {
                       onChange={(e) => setLoginEmail(e.target.value)}
                       className="pl-10 h-12 text-base"
                       placeholder="admin@lcup.edu.ph"
+                      autoFocus
                     />
                   </div>
                 </div>
@@ -414,6 +386,9 @@ const Login = () => {
                       type="button"
                       onClick={() => setShowLoginPassword(!showLoginPassword)}
                       disabled={busy}
+                      aria-label={
+                        showLoginPassword ? "Hide password" : "Show password"
+                      }
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     >
                       {showLoginPassword ? (
@@ -456,7 +431,7 @@ const Login = () => {
 
               <div className="my-6 flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
                   Or Continue With
                 </span>
                 <div className="h-px flex-1 bg-border" />
@@ -489,7 +464,7 @@ const Login = () => {
 
               <div className="my-6 flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
                   Magic Code
                 </span>
                 <div className="h-px flex-1 bg-border" />
@@ -508,7 +483,7 @@ const Login = () => {
                       onChange={(event) =>
                         setMagicCode(formatMagicCode(event.target.value))
                       }
-                      className="h-12 pl-10 text-base uppercase tracking-[0.2em]"
+                      className="h-12 pl-10 font-mono text-base uppercase tracking-normal"
                       placeholder="ABCDE-FGHIJ"
                       disabled={busy}
                       autoCapitalize="characters"

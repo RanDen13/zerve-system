@@ -8,6 +8,7 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import {
   Building2,
   CalendarDays,
+  CirclePlus,
   History,
   Home,
   LayoutDashboard,
@@ -15,6 +16,7 @@ import {
   Menu,
   PackageCheck,
   Settings,
+  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
@@ -61,6 +63,12 @@ const navItems: NavItem[] = [
     roles: ["OFFICER", "APPROVER", "ADMIN", "SUPER_ADMIN"],
   },
   {
+    label: "Approvals",
+    href: "/user/approvals",
+    icon: <ShieldCheck className="h-5 w-5" />,
+    roles: ["APPROVER", "ADMIN", "SUPER_ADMIN"],
+  },
+  {
     label: "Calendar",
     href: "/user/calendar",
     icon: <CalendarDays className="h-5 w-5" />,
@@ -88,6 +96,7 @@ const navItems: NavItem[] = [
 const navTourTargets: Record<string, string> = {
   "/user/dashboard": "nav-dashboard",
   "/user/bookings": "nav-bookings",
+  "/user/approvals": "nav-approvals",
   "/user/calendar": "nav-calendar",
   "/user/equipment": "nav-equipment",
   "/user/spaces": "nav-spaces",
@@ -95,10 +104,40 @@ const navTourTargets: Record<string, string> = {
 };
 
 function isNavActive(pathname: string, href: string) {
-  if (href === "/user/bookings" && pathname.startsWith("/user/approvals")) {
-    return true;
-  }
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function roleLabel(role: AppRole) {
+  return role.replaceAll("_", " ").toLowerCase();
+}
+
+function quickActionForRole(role: AppRole) {
+  if (role === "OFFICER") {
+    return {
+      href: "/user/bookings/create",
+      label: "Create booking",
+      icon: <CirclePlus className="h-4 w-4" />,
+    };
+  }
+  if (role === "EQUIPMENT_PROVISIONER") {
+    return {
+      href: "/user/equipment",
+      label: "Open equipment queue",
+      icon: <PackageCheck className="h-4 w-4" />,
+    };
+  }
+  if (role === "SUPER_ADMIN") {
+    return {
+      href: "/user/accounts",
+      label: "Manage accounts",
+      icon: <Users className="h-4 w-4" />,
+    };
+  }
+  return {
+    href: "/user/approvals",
+    label: "Review approvals",
+    icon: <ShieldCheck className="h-4 w-4" />,
+  };
 }
 
 export default function Sidebar({
@@ -108,6 +147,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const quickAction = quickActionForRole(userRole);
 
   useEffect(() => {
     const openSidebar = () => setIsMobileOpen(true);
@@ -131,13 +171,14 @@ export default function Sidebar({
             <div>
               <h2 className="text-base font-bold leading-tight">Zerve</h2>
               <p className="text-xs capitalize text-muted-foreground">
-                {userRole.replaceAll("_", " ").toLowerCase()}
+                {roleLabel(userRole)}
               </p>
             </div>
           </div>
           <button
             onClick={() => setIsMobileOpen(false)}
-            className="text-muted-foreground hover:text-foreground lg:hidden"
+            className="rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground lg:hidden"
+            aria-label="Close navigation"
           >
             <X className="h-6 w-6" />
           </button>
@@ -151,10 +192,20 @@ export default function Sidebar({
             </p>
           </div>
         )}
+
+        <Button asChild className="mt-4 w-full justify-start gap-2">
+          <Link href={quickAction.href} onClick={() => setIsMobileOpen(false)}>
+            {quickAction.icon}
+            {quickAction.label}
+          </Link>
+        </Button>
       </div>
 
       <LayoutGroup>
-        <nav className="flex-1 space-y-2 overflow-y-auto p-4">
+        <nav
+          aria-label="Primary navigation"
+          className="flex-1 space-y-1 overflow-y-auto p-4"
+        >
           {navItems
             .filter((item) => !item.roles || item.roles.includes(userRole))
             .map((item) => {
@@ -169,8 +220,9 @@ export default function Sidebar({
                     href={item.href}
                     data-tour={navTourTargets[item.href]}
                     onClick={() => setIsMobileOpen(false)}
+                    aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "relative isolate flex items-center gap-3 overflow-visible rounded-lg px-4 py-3 transition-colors duration-200",
+                      "relative isolate flex min-h-11 items-center gap-3 overflow-visible rounded-lg px-4 py-3 transition-colors duration-200",
                       isActive
                         ? "text-sidebar-primary-foreground"
                         : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
@@ -199,22 +251,22 @@ export default function Sidebar({
       </LayoutGroup>
 
       <div className="space-y-2 border-t border-sidebar-border p-4">
-        <Link href="/">
-          <Button variant="outline" className="w-full justify-start gap-3">
+        <Button asChild variant="outline" className="w-full justify-start gap-3">
+          <Link href="/" onClick={() => setIsMobileOpen(false)}>
             <Home className="h-5 w-5" />
             Home
-          </Button>
-        </Link>
+          </Link>
+        </Button>
         <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
           <span className="font-medium">Theme</span>
           <ModeToggle />
         </div>
-        <Link href="/signout">
-          <Button variant="destructive" className="w-full justify-start gap-3">
+        <Button asChild variant="destructive" className="w-full justify-start gap-3">
+          <Link href="/signout" onClick={() => setIsMobileOpen(false)}>
             <LogOut className="h-5 w-5" />
             Sign Out
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
     </div>
   );
@@ -224,6 +276,8 @@ export default function Sidebar({
       <button
         onClick={() => setIsMobileOpen(true)}
         data-tour="sidebar-menu"
+        aria-label="Open navigation"
+        aria-expanded={isMobileOpen}
         className="fixed left-4 top-4 z-40 rounded-lg border border-border bg-background p-2 shadow-lg lg:hidden"
       >
         <Menu className="h-6 w-6" />
@@ -244,6 +298,7 @@ export default function Sidebar({
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", stiffness: 330, damping: 32 }}
+              aria-label="Mobile navigation"
               className="fixed bottom-0 left-0 top-0 z-50 w-72 border-r border-sidebar-border bg-sidebar shadow-xl lg:hidden"
             >
               <SidebarContent />
@@ -252,7 +307,10 @@ export default function Sidebar({
         )}
       </AnimatePresence>
 
-      <aside className="sticky top-0 hidden h-screen w-72 flex-col border-r border-sidebar-border bg-sidebar shadow-sm lg:flex">
+      <aside
+        aria-label="Sidebar navigation"
+        className="sticky top-0 hidden h-screen w-72 flex-col border-r border-sidebar-border bg-sidebar shadow-sm lg:flex"
+      >
         <SidebarContent />
       </aside>
     </>

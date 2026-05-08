@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  ErrorStateCard,
+  PageHeader,
+  PageShell,
+} from "@/app/components/UX";
 import ModalBase from "@/app/components/Popup/ModalBase";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
 import { Button } from "@/app/components/ui/button";
@@ -19,7 +24,6 @@ import {
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import {
-  ArrowLeft,
   FileDown,
   History,
   Loader2,
@@ -97,15 +101,11 @@ export default function SapfApprovalDetailPage({
 
   if (!payload) {
     return (
-      <div className="p-4 lg:p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Approval details unavailable</CardTitle>
-            <CardDescription>
-              We could not load this request right now.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <PageShell>
+        <ErrorStateCard
+          title="Approval details unavailable"
+          description="We could not load this request right now."
+          action={
             <Button onClick={refresh} variant="outline" disabled={loading}>
               {loading ? (
                 <ButtonSpinner />
@@ -114,9 +114,9 @@ export default function SapfApprovalDetailPage({
               )}
               {loading ? "Loading..." : "Try again"}
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          }
+        />
+      </PageShell>
     );
   }
 
@@ -170,25 +170,13 @@ export default function SapfApprovalDetailPage({
   };
 
   return (
-    <div className="space-y-6 p-4 lg:p-8">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
-          <Button asChild variant="outline">
-            <Link href="/user/bookings">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Approval Details
-            </h1>
-            <p className="text-muted-foreground">
-              Review and action this request.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <PageShell>
+      <PageHeader
+        title="Approval Details"
+        description="Review the request, inspect activity, and complete the next workflow action."
+        backHref="/user/approvals"
+        actions={
+          <>
           {canSdsManage && (
             <Button asChild variant="outline">
               <Link href={`/user/bookings/create?requestId=${request.id}`}>
@@ -213,7 +201,11 @@ export default function SapfApprovalDetailPage({
             </Button>
           )}
           <Button asChild variant="outline">
-            <a href={`/api/sapf/${request.id}/preview`} target="_blank">
+            <a
+              href={`/api/sapf/${request.id}/preview`}
+              target="_blank"
+              rel="noreferrer"
+            >
               <FileDown className="mr-2 h-4 w-4" />
               Preview Reservation
             </a>
@@ -232,8 +224,9 @@ export default function SapfApprovalDetailPage({
             )}
             {loading ? "Refreshing..." : "Refresh"}
           </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <Tabs defaultValue="details" className="space-y-4">
         <TabsList
@@ -327,6 +320,6 @@ export default function SapfApprovalDetailPage({
           </Card>
         </ModalBase>
       )}
-    </div>
+    </PageShell>
   );
 }

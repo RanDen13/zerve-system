@@ -75,6 +75,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
     setValue: (value: string) => void,
     show: boolean,
     setShow: (value: boolean) => void,
+    autoFocus = false,
   ) => (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
@@ -87,6 +88,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
           className="h-12 pr-10"
           autoComplete="new-password"
           required
+          autoFocus={autoFocus}
         />
         <button
           type="button"
@@ -139,6 +141,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
               setPassword,
               showPassword,
               setShowPassword,
+              true,
             )}
             {passwordInput(
               "confirm-new-password",

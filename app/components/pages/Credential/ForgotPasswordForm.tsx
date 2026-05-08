@@ -60,6 +60,7 @@ export default function ForgotPasswordForm() {
                 required
                 disabled={loading}
                 className="h-12"
+                autoFocus
               />
             </div>
             <Button type="submit" disabled={loading} className="h-12 w-full">

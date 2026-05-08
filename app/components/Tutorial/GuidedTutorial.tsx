@@ -489,7 +489,7 @@ export default function GuidedTutorial({
                 <Map className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
                   Step {stepIndex + 1} of {steps.length}
                 </p>
                 <h2

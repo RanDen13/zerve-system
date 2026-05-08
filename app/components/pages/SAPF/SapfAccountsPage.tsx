@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  EmptyState,
+  ErrorStateCard,
+  PageHeader,
+  PageShell,
+} from "@/app/components/UX";
 import ModalBase from "@/app/components/Popup/ModalBase";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
 import { Badge } from "@/app/components/ui/badge";
@@ -14,7 +20,6 @@ import {
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import {
-  MotionPage,
   MotionSection,
 } from "@/app/components/ui/motion";
 import {
@@ -25,7 +30,7 @@ import {
   SelectValue,
 } from "@/app/components/ui/select";
 import { format } from "date-fns";
-import { Pencil, Plus, RefreshCcw, UserPlus, Users } from "lucide-react";
+import { Pencil, Plus, RefreshCcw, Search, UserPlus, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   createManagedAccount,
@@ -428,6 +433,8 @@ export default function SapfAccountsPage() {
   const [creating, setCreating] = useState(false);
   const [createRole, setCreateRole] = useState("OFFICER");
   const [createPosition, setCreatePosition] = useState("");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const canPickCreatePosition = ["APPROVER", "ADMIN"].includes(createRole);
   const visibleCreatePositionOptions =
     createRole === "ADMIN" ? (["SDS"] as const) : createPositionOptions;
@@ -480,44 +487,113 @@ export default function SapfAccountsPage() {
 
   if (!workspace) {
     return (
-      <div className="p-4 lg:p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Accounts unavailable</CardTitle>
-            <CardDescription>
-              We could not load account management data.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <PageShell>
+        <ErrorStateCard
+          title="Accounts unavailable"
+          description="We could not load account management data."
+          action={
             <Button onClick={refresh} variant="outline">
               <RefreshCcw className="mr-2 h-4 w-4" />
               Try again
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          }
+        />
+      </PageShell>
     );
   }
 
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredUsers = workspace.users.filter((user) => {
+    const matchesStatus =
+      statusFilter === "ALL" || user.status === statusFilter;
+    const haystack = [
+      user.name,
+      user.email,
+      user.title,
+      user.role,
+      user.approverPositions?.map((item) => item.position).join(" "),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return matchesStatus && (!normalizedQuery || haystack.includes(normalizedQuery));
+  });
+
   return (
-    <MotionPage className="space-y-8 p-4 lg:p-8">
-      <MotionSection className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Accounts</h1>
-          <p className="text-muted-foreground">
-            Manage user accounts, roles, and approver positions.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create account
-          </Button>
-          <Button onClick={refresh} variant="outline" disabled={loading}>
-            <RefreshCcw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
+    <PageShell>
+      <MotionSection>
+        <PageHeader
+          title="Accounts"
+          description="Manage user accounts, roles, approver positions, and magic-code access."
+          actions={
+            <>
+              <Button onClick={() => setShowCreate(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create account
+              </Button>
+              <Button onClick={refresh} variant="outline" disabled={loading}>
+                <RefreshCcw
+                  className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </Button>
+            </>
+          }
+        />
+      </MotionSection>
+
+      <MotionSection>
+        <Card>
+          <CardHeader>
+            <CardTitle>Find accounts</CardTitle>
+            <CardDescription>
+              Search by name, email, title, role, or approver position.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 lg:grid-cols-[1fr_220px_auto] lg:items-end">
+              <div className="space-y-2">
+                <Label htmlFor="account-search">Search</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="account-search"
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Name, email, role, or position"
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="account-status">Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger id="account-status" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All statuses</SelectItem>
+                    <SelectItem value="PENDING">Pending</SelectItem>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!query && statusFilter === "ALL"}
+                onClick={() => {
+                  setQuery("");
+                  setStatusFilter("ALL");
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </MotionSection>
 
       <MotionSection>
@@ -530,9 +606,17 @@ export default function SapfAccountsPage() {
           <CardDescription>
             {workspace.users.length} account
             {workspace.users.length === 1 ? "" : "s"} in the system.
+            {" "}Showing {filteredUsers.length}.
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
+          {filteredUsers.length === 0 ? (
+            <EmptyState
+              title="No accounts match"
+              description="Adjust your search or status filter to find more accounts."
+              icon={<Users className="h-6 w-6" />}
+            />
+          ) : (
           <table className="min-w-full text-sm">
             <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
               <tr>
@@ -545,7 +629,7 @@ export default function SapfAccountsPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {workspace.users.map((user) => (
+              {filteredUsers.map((user) => (
                 <AccountRow
                   key={user.id}
                   user={user}
@@ -556,6 +640,7 @@ export default function SapfAccountsPage() {
               ))}
             </tbody>
           </table>
+          )}
         </CardContent>
       </Card>
       </MotionSection>
@@ -585,6 +670,7 @@ export default function SapfAccountsPage() {
                     placeholder="e.g., Juan Dela Cruz"
                     autoComplete="name"
                     required
+                    autoFocus
                   />
                 </div>
                 <div className="space-y-2">
@@ -698,6 +784,6 @@ export default function SapfAccountsPage() {
           </Card>
         </ModalBase>
       )}
-    </MotionPage>
+    </PageShell>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Callout, PageHeader, PageShell } from "@/app/components/UX";
 import ModalBase from "@/app/components/Popup/ModalBase";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
 import { Button } from "@/app/components/ui/button";
@@ -13,7 +14,7 @@ import {
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { MotionPage, MotionSection } from "@/app/components/ui/motion";
+import { MotionSection } from "@/app/components/ui/motion";
 import { startTutorialProgress } from "@/app/components/Tutorial/TutorialActions";
 import { authClient } from "@/lib/auth-client";
 import {
@@ -110,12 +111,12 @@ export default function SystemSettingsPage({
   };
 
   return (
-    <MotionPage className="space-y-6 p-4 lg:p-8">
+    <PageShell>
       <MotionSection>
-        <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage account security and system configuration.
-        </p>
+        <PageHeader
+          title="Settings"
+          description="Manage account security, notifications, tutorials, and system email configuration."
+        />
       </MotionSection>
 
       <MotionSection>
@@ -226,10 +227,10 @@ export default function SystemSettingsPage({
           <CardContent>
             <form action={handleSubmit} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground md:col-span-2">
+                <Callout tone="info" className="md:col-span-2">
                   SMTP User/Password authenticate with your mail provider.
                   Sender Email/Name show to recipients in the From field.
-                </div>
+                </Callout>
                 <div>
                   <Label htmlFor="smtpHost">SMTP Host</Label>
                   <Input
@@ -318,7 +319,7 @@ export default function SystemSettingsPage({
       {passwordOpen && (
         <ChangePasswordModal onClose={() => setPasswordOpen(false)} />
       )}
-    </MotionPage>
+    </PageShell>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import CreateEventSpacePopup from "@/app/components/EventSpace/CreateEventSpacePopup";
 import EventSpaceCard from "@/app/components/EventSpace/EventSpaceCard";
+import { EmptyState, PageHeader, PageShell, StatCard } from "@/app/components/UX";
 import {
   createVenueBlock,
   deleteUniversityWideVenueBlock,
@@ -197,96 +198,67 @@ export default function AdminSpaces({
   };
 
   const filteredSpaces = eventSpaces.filter((space) => {
-    const matchesSearch = space.name
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const matchesCapacity = filterCapacity
-      ? space.capacity >= parseInt(filterCapacity)
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const matchesSearch = normalizedSearch
+      ? [space.name, space.location, space.description]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedSearch))
+      : true;
+    const requestedCapacity = Number(filterCapacity);
+    const matchesCapacity =
+      filterCapacity && Number.isFinite(requestedCapacity)
+        ? space.capacity >= requestedCapacity
       : true;
     return matchesSearch && matchesCapacity;
   });
 
   return (
-    <div className="p-4 lg:p-8 space-y-8">
-      {/* Header */}
+    <PageShell>
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex items-center justify-between"
       >
-        <div>
-          <h1 className="text-3xl font-bold">Manage Event Spaces</h1>
-          <p className="text-muted-foreground mt-2">
-            Add, edit, or remove event spaces from the system
-          </p>
-        </div>
-        <Button
-          className="bg-linear-to-r"
-          onClick={() => setShowCreatePopup(true)}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add New Space
-        </Button>
+        <PageHeader
+          title="Manage Event Spaces"
+          description="Add, edit, block, or remove reservable venues from the system."
+          actions={
+            <Button onClick={() => setShowCreatePopup(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add New Space
+            </Button>
+          }
+        />
       </motion.div>
 
-      {/* Stats */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+        className="grid gap-4 md:grid-cols-3"
       >
-        <Card className="border-2">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-linear-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center text-white shadow-lg">
-                <Building2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold">{eventSpaces.length}</h3>
-                <p className="text-sm text-muted-foreground">Total Spaces</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-linear-to-r from-emerald-500 to-green-500 rounded-xl flex items-center justify-center text-white shadow-lg">
-                <Calendar className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold">
-                  {eventSpaces.filter((s) => s.status === "ACTIVE").length}
-                </h3>
-                <p className="text-sm text-muted-foreground">Active Spaces</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-linear-to-r from-amber-500 to-orange-500 rounded-xl flex items-center justify-center text-white shadow-lg">
-                <Users className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold">
-                  {
-                    eventSpaces.filter((s) => s.status === "UNDER_MAINTENANCE")
-                      .length
-                  }
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Under Maintenance
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard
+          label="Total Spaces"
+          value={eventSpaces.length}
+          icon={<Building2 className="h-5 w-5" />}
+          description="All venues in the system"
+        />
+        <StatCard
+          label="Active Spaces"
+          value={eventSpaces.filter((s) => s.status === "ACTIVE").length}
+          icon={<Calendar className="h-5 w-5" />}
+          description="Available for reservation"
+          tone="success"
+        />
+        <StatCard
+          label="Under Maintenance"
+          value={
+            eventSpaces.filter((s) => s.status === "UNDER_MAINTENANCE").length
+          }
+          icon={<Users className="h-5 w-5" />}
+          description="Unavailable or limited"
+          tone="warning"
+        />
       </motion.div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
@@ -357,7 +329,6 @@ export default function AdminSpaces({
         </Card>
       </div>
 
-      {/* Filters */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -403,7 +374,6 @@ export default function AdminSpaces({
         </Card>
       </motion.div>
 
-      {/* Results Count */}
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground">
           Showing <span className="font-semibold">{filteredSpaces.length}</span>{" "}
@@ -411,7 +381,6 @@ export default function AdminSpaces({
         </p>
       </div>
 
-      {/* Spaces Grid */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -430,27 +399,23 @@ export default function AdminSpaces({
         ))}
       </motion.div>
 
-      {/* No Results */}
       {filteredSpaces.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-center py-12"
+          className="py-4"
         >
-          <Building2 className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-foreground mb-2">
-            No spaces found
-          </h3>
-          <p className="text-muted-foreground">
-            Try adjusting your search filters to find more results
-          </p>
+          <EmptyState
+            title="No spaces found"
+            description="Try adjusting your search filters to find more results."
+            icon={<Building2 className="h-6 w-6" />}
+          />
         </motion.div>
       )}
 
-      {/* Create Event Space Popup */}
       {showCreatePopup && (
         <CreateEventSpacePopup onClose={() => setShowCreatePopup(false)} />
       )}
-    </div>
+    </PageShell>
   );
 }

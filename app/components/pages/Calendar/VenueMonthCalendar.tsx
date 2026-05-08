@@ -128,9 +128,9 @@ function temperatureLabel(weather?: CalendarWeatherDay) {
     typeof weather.temperatureMin === "number"
       ? `${Math.round(weather.temperatureMin)}`
       : "";
-  if (max && min) return `${min}-${max}°C`;
-  if (max) return `${max}°C`;
-  if (min) return `${min}°C`;
+  if (max && min) return `${min}-${max} C`;
+  if (max) return `${max} C`;
+  if (min) return `${min} C`;
   return "";
 }
 
@@ -348,7 +348,7 @@ export default function VenueMonthCalendar({
             </span>
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
               {title}
             </p>
             <div className="flex flex-wrap items-center gap-2">

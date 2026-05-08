@@ -1,6 +1,7 @@
 "use client";
 
 import { deleteEventSpace } from "@/app/components/pages/Spaces/EventSpaceActions";
+import { StatusBadge } from "@/app/components/UX";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
 import {
@@ -9,7 +10,7 @@ import {
   EventSpaceImage,
 } from "@/generated/prisma/browser";
 import { motion } from "framer-motion";
-import { Building2, Calendar, MapPin, Users } from "lucide-react";
+import { Building2, Calendar, Eye, MapPin, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -48,7 +49,7 @@ export default function EventSpaceCard({
   const router = useRouter();
 
   const handleDelete = async () => {
-    const confirmed = await statusPopup.showYesNo(
+    const confirmed = await statusPopup.showWarning(
       `Are you sure you want to delete the event space "${name}"? This action cannot be undone.`,
     );
 
@@ -92,22 +93,8 @@ export default function EventSpaceCard({
             showControls={false}
             showDots={false}
           />
-          <div className="absolute top-3 right-3">
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-semibold shadow-lg ${
-                status === "ACTIVE"
-                  ? "bg-emerald-500 text-white"
-                  : status === "UNDER_MAINTENANCE"
-                    ? "bg-amber-500 text-white"
-                    : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {status === "ACTIVE"
-                ? "Active"
-                : status === "UNDER_MAINTENANCE"
-                  ? "Maintenance"
-                  : "Inactive"}
-            </span>
+          <div className="absolute right-3 top-3">
+            <StatusBadge status={status} className="shadow-lg" />
           </div>
         </div>
 
@@ -181,16 +168,17 @@ export default function EventSpaceCard({
                 className="cursor-pointer"
                 onClick={handleDelete}
               >
-                <Calendar className="w-4 h-4 mr-2" />
+                <Trash2 className="mr-2 h-4 w-4" />
                 Delete
               </Button>
             </div>
           ) : (
-            <Link href={detailsHref || `/user/spaces/${id}`} className="block">
-              <Button variant="outline" className="w-full cursor-pointer">
+            <Button asChild variant="outline" className="w-full cursor-pointer">
+              <Link href={detailsHref || `/user/spaces/${id}`}>
+                <Eye className="mr-2 h-4 w-4" />
                 View Details
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           )}
         </CardContent>
       </Card>

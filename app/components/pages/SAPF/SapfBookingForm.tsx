@@ -29,6 +29,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import {
   CalendarDays,
   ChevronsUpDown,
+  CheckCircle2,
   Info,
   Loader2,
   Paperclip,
@@ -739,6 +740,27 @@ export default function SapfBookingForm({
     }
   };
 
+  const scheduleComplete = scheduleRows.every(
+    (row) => row.date && row.startTime && row.endTime,
+  );
+  const approvalComplete =
+    lockApprovalChain ||
+    (Boolean(selectedAdviserId) && !hasMissingChainOptions);
+  const formProgressSteps = [
+    {
+      href: "#form-venues",
+      label: "Venues",
+      done: selectedVenueIds.length > 0,
+    },
+    { href: "#form-schedule", label: "Schedule", done: scheduleComplete },
+    { href: "#form-details", label: "Details", done: true },
+    {
+      href: "#form-support",
+      label: "Support",
+      done: selectedSupportValues.length > 0,
+    },
+    { href: "#form-approval", label: "Approval", done: approvalComplete },
+  ];
   return (
     <form key={formKey} onSubmit={handleSubmit} className="space-y-6">
       {!initialRequest?.id && (
@@ -762,7 +784,49 @@ export default function SapfBookingForm({
         />
       ))}
 
-      <Card>
+      <div className="sticky top-14 z-30 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur lg:top-4">
+        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Reservation sections
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Jump through the long SAPF form. Required fields are checked when
+              you save or submit.
+            </p>
+          </div>
+          <p className="text-xs font-medium text-primary">
+            {isEditing ? "Editing request" : "New request"}
+          </p>
+        </div>
+        <nav
+          aria-label="Booking form sections"
+          className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5"
+        >
+          {formProgressSteps.map((step, index) => (
+            <a
+              key={step.href}
+              href={step.href}
+              className={`flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-muted ${
+                step.done
+                  ? "border-primary/30 bg-primary/5 text-foreground"
+                  : "border-border bg-background text-muted-foreground"
+              }`}
+            >
+              {step.done ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full border text-[10px]">
+                  {index + 1}
+                </span>
+              )}
+              {step.label}
+            </a>
+          ))}
+        </nav>
+      </div>
+
+      <Card id="form-venues" className="scroll-mt-40">
         <CardHeader>
           <CardTitle>Venues</CardTitle>
           <CardDescription>
@@ -806,6 +870,7 @@ export default function SapfBookingForm({
                         key={venue.id}
                         role="button"
                         tabIndex={0}
+                        aria-pressed={checked}
                         onClick={() => toggleVenue(venue.id, !checked)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
@@ -813,7 +878,7 @@ export default function SapfBookingForm({
                             toggleVenue(venue.id, !checked);
                           }
                         }}
-                        className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted"
+                        className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                       >
                         <Checkbox checked={checked} className="mt-0.5" />
                         <span className="min-w-0">
@@ -856,7 +921,7 @@ export default function SapfBookingForm({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="form-schedule" className="scroll-mt-40">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CalendarDays className="h-5 w-5" />
@@ -944,7 +1009,7 @@ export default function SapfBookingForm({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="form-details" className="scroll-mt-40">
         <CardHeader>
           <CardTitle>Department Category</CardTitle>
         </CardHeader>
@@ -968,7 +1033,7 @@ export default function SapfBookingForm({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="scroll-mt-40">
         <CardHeader>
           <CardTitle>Part 1: Activity Details</CardTitle>
         </CardHeader>
@@ -1040,7 +1105,7 @@ export default function SapfBookingForm({
             <div className="md:col-span-2">
               <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
                 <div className="border-b bg-orange-50 px-4 py-3">
-                  <p className="text-sm font-bold tracking-wide text-orange-600">
+                  <p className="text-sm font-bold tracking-normal text-orange-600">
                     OFF-CAMPUS AGREEMENT{" "}
                     <span className="font-normal italic text-muted-foreground">
                       This section is only for off-campus activity.
@@ -1205,12 +1270,16 @@ export default function SapfBookingForm({
             <Label>Applicable Augustinian Core Values</Label>
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
               {CORE_VALUE_OPTIONS.map((value) => (
-                <label key={value} className="flex items-center gap-2 text-sm">
+                <label
+                  key={value}
+                  className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-muted"
+                >
                   <input
                     type="checkbox"
                     name="coreValues"
                     value={value}
                     defaultChecked={selectedCoreValues.has(value)}
+                    className="h-4 w-4 rounded border-border accent-primary"
                   />
                   {value}
                 </label>
@@ -1221,12 +1290,16 @@ export default function SapfBookingForm({
             <Label>Expected Graduate Attributes</Label>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {GRADUATE_ATTRIBUTE_OPTIONS.map((value) => (
-                <label key={value} className="flex items-center gap-2 text-sm">
+                <label
+                  key={value}
+                  className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-muted"
+                >
                   <input
                     type="checkbox"
                     name="graduateAttributes"
                     value={value}
                     defaultChecked={selectedGraduateAttributes.has(value)}
+                    className="h-4 w-4 rounded border-border accent-primary"
                   />
                   {value}
                 </label>
@@ -1309,7 +1382,7 @@ export default function SapfBookingForm({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="form-support" className="scroll-mt-40">
         <CardHeader>
           <CardTitle>Part 2: School Support</CardTitle>
         </CardHeader>
@@ -1428,7 +1501,7 @@ export default function SapfBookingForm({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="scroll-mt-40">
         <CardHeader>
           <CardTitle>Part 3: Additional Information</CardTitle>
         </CardHeader>
@@ -1442,7 +1515,7 @@ export default function SapfBookingForm({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="form-approval" className="scroll-mt-40">
         <CardHeader>
           <CardTitle>Approval Chain</CardTitle>
           <CardDescription>
@@ -1592,6 +1665,7 @@ export default function SapfBookingForm({
                             key={user.id}
                             role="button"
                             tabIndex={0}
+                            aria-pressed={checked}
                             onClick={() =>
                               toggleAdditionalSignatory(user.id, !checked)
                             }
@@ -1604,7 +1678,7 @@ export default function SapfBookingForm({
                                 toggleAdditionalSignatory(user.id, !checked);
                               }
                             }}
-                            className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted"
+                            className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                           >
                             <Checkbox checked={checked} className="mt-0.5" />
                             <span className="min-w-0">
@@ -1651,7 +1725,12 @@ export default function SapfBookingForm({
         </CardContent>
       </Card>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+      <div className="sticky bottom-0 z-30 flex flex-col gap-3 rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-end">
+        <p className="text-xs text-muted-foreground sm:mr-auto">
+          {isSdsEditor
+            ? "Save updates carefully. Changes are reflected on the active request."
+            : "Save a draft anytime. Submit sends the reservation into the approval workflow."}
+        </p>
         {!isSdsEditor && (
           <Button
             type="submit"

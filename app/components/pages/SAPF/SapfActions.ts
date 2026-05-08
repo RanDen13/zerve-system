@@ -8,6 +8,7 @@ import {
   notifyApproverForSapfReview,
   notifyOfficerForSapfWorkflow,
   notifySapfBookingUpdated,
+  notifyUserForSapfWorkflow,
 } from "@/lib/sapf-notification-email";
 import {
   canBypassSystemMaintenance,
@@ -2859,15 +2860,30 @@ export async function cancelSapfRequest(
     ];
 
     await Promise.all(
-      reviewerIds.map((reviewerId) =>
-        createNotification(
+      reviewerIds.map(async (reviewerId) => {
+        await createNotification(
           reviewerId,
           "Reservation cancelled",
           `${request.requestNumber} was cancelled by ${userDisplayName(user)}.`,
           "REQUEST",
           request.id,
-        ),
-      ),
+        );
+        await notifyUserForSapfWorkflow({
+          requestId: request.id,
+          userId: reviewerId,
+          title: "was cancelled",
+          eyebrow: "Reservation cancelled",
+          headline: "A reservation in your queue was cancelled",
+          message:
+            "This reservation was cancelled before the approval workflow was completed.",
+          statusLabel: "Cancelled",
+          tone: "danger",
+          comment,
+          actorName: userDisplayName(user),
+          detailPath: `/user/approvals/${request.id}`,
+          actionLabel: "View Reservation",
+        });
+      }),
     );
 
     revalidatePath("/user/dashboard");
@@ -3128,6 +3144,37 @@ export async function reviewSapfChangeRequest(
       approved && changeRequest.type === "EDIT" ? "REVISION" : "REQUEST",
       request.id,
     );
+    await notifyOfficerForSapfWorkflow({
+      requestId: request.id,
+      title: approved
+        ? changeRequest.type === "EDIT"
+          ? "edit request was approved"
+          : "cancellation request was approved"
+        : changeRequest.type === "EDIT"
+          ? "edit request was rejected"
+          : "cancellation request was rejected",
+      eyebrow: "SDS decision",
+      headline: approved
+        ? changeRequest.type === "EDIT"
+          ? "Your edit request was approved"
+          : "Your cancellation request was approved"
+        : changeRequest.type === "EDIT"
+          ? "Your edit request was rejected"
+          : "Your cancellation request was rejected",
+      message: approved
+        ? changeRequest.type === "EDIT"
+          ? "SDS approved your edit request. You can now revise and resubmit the reservation."
+          : "SDS approved your cancellation request and the booking has been cancelled."
+        : "SDS reviewed your request and left the booking unchanged.",
+      statusLabel: approved ? "Approved" : "Rejected",
+      tone: approved ? "success" : "warning",
+      comment: comment || changeRequest.reason,
+      actorName: userDisplayName(user),
+      actionLabel:
+        approved && changeRequest.type === "EDIT"
+          ? "Revise Reservation"
+          : "View Reservation",
+    });
 
     revalidatePath("/user/dashboard");
     revalidatePath("/user/bookings");
@@ -4028,15 +4075,33 @@ export async function addConcernMessage(
     await Promise.all(
       notificationTargets
         .filter((id, index, ids) => id !== user.id && ids.indexOf(id) === index)
-        .map((id) =>
-          createNotification(
+        .map(async (id) => {
+          await createNotification(
             id,
             "New private concern message",
             `${user.name} commented on ${request.requestNumber}.`,
             "COMMENT",
             request.id,
-          ),
-        ),
+          );
+          await notifyUserForSapfWorkflow({
+            requestId: request.id,
+            userId: id,
+            title: "has a new concern message",
+            eyebrow: "Private concern message",
+            headline: "A new concern message was added",
+            message:
+              "A private concern-thread message was added to this reservation. Open the request to review and reply.",
+            statusLabel: "New Message",
+            tone: "info",
+            comment: body,
+            actorName: userDisplayName(user),
+            detailPath:
+              id === request.officerId
+                ? `/user/bookings/${request.id}`
+                : `/user/approvals/${request.id}`,
+            actionLabel: "Open Thread",
+          });
+        }),
     );
 
     revalidatePath("/user/dashboard");

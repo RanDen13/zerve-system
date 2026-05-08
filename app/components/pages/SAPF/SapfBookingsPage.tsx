@@ -1,14 +1,15 @@
 "use client";
 
+import {
+  EmptyState,
+  ErrorStateCard,
+  InlineLoadingState,
+  PageHeader,
+  PageShell,
+  StatusBadge,
+} from "@/app/components/UX";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
 import { Button } from "@/app/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/app/components/ui/card";
 import {
   Tabs,
   TabsContent,
@@ -18,7 +19,6 @@ import {
 import {
   MotionItem,
   MotionList,
-  MotionPage,
   MotionSection,
 } from "@/app/components/ui/motion";
 import { CheckCircle, Clock, History, Loader2, RefreshCcw } from "lucide-react";
@@ -58,7 +58,13 @@ function RequestList({
   };
 }) {
   if (requests.length === 0) {
-    return <p className="text-sm text-muted-foreground">{empty}</p>;
+    return (
+      <EmptyState
+        title="No requests found"
+        description={empty}
+        icon={<History className="h-6 w-6" />}
+      />
+    );
   }
 
   return (
@@ -153,9 +159,9 @@ export default function SapfBookingsPage() {
         ]),
     {
       value: "history",
-      label: "Old",
+      label: "History",
       icon: <History className="h-4 w-4" />,
-      empty: "No old requests match your filters.",
+      empty: "No history records match your filters.",
     },
   ];
 
@@ -165,15 +171,11 @@ export default function SapfBookingsPage() {
 
   if (!me) {
     return (
-      <div className="p-4 lg:p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Bookings unavailable</CardTitle>
-            <CardDescription>
-              We could not load your booking data.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <PageShell>
+        <ErrorStateCard
+          title="Bookings unavailable"
+          description="We could not load your booking data."
+          action={
             <Button onClick={refresh} variant="outline" disabled={Boolean(loadingTab)}>
               {loadingTab ? (
                 <ButtonSpinner />
@@ -182,30 +184,40 @@ export default function SapfBookingsPage() {
               )}
               {loadingTab ? "Loading..." : "Try again"}
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          }
+        />
+      </PageShell>
     );
   }
 
   return (
-    <MotionPage className="space-y-8 p-4 lg:p-8">
-      <MotionSection className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Bookings</h1>
-          <p className="text-muted-foreground">
-            Pending reviews, followed requests, and old venue reservation
-            records.
-          </p>
-        </div>
-        <Button onClick={refresh} variant="outline" disabled={Boolean(loadingTab)}>
-          {loadingTab ? (
-            <ButtonSpinner />
-          ) : (
-            <RefreshCcw className="mr-2 h-4 w-4" />
-          )}
-          {loadingTab ? "Refreshing..." : "Refresh"}
-        </Button>
+    <PageShell>
+      <MotionSection>
+        <PageHeader
+          title="Bookings"
+          description="Pending requests, followed reviews, and reservation history in one searchable workspace."
+          actions={
+            <>
+              {me.role === "OFFICER" && (
+                <Button asChild>
+                  <Link href="/user/bookings/create">Create booking</Link>
+                </Button>
+              )}
+              <Button
+                onClick={refresh}
+                variant="outline"
+                disabled={Boolean(loadingTab)}
+              >
+                {loadingTab ? (
+                  <ButtonSpinner />
+                ) : (
+                  <RefreshCcw className="h-4 w-4" />
+                )}
+                {loadingTab ? "Refreshing..." : "Refresh"}
+              </Button>
+            </>
+          }
+        />
       </MotionSection>
 
       <MotionSection>
@@ -231,6 +243,11 @@ export default function SapfBookingsPage() {
               <TabsTrigger key={item.value} value={item.value}>
                 {item.icon}
                 {item.label}
+                <StatusBadge
+                  label={String(tabRequests[item.value]?.length ?? 0)}
+                  tone={activeTab === item.value ? "default" : "muted"}
+                  className="ml-1 px-1.5 py-0 text-[10px]"
+                />
               </TabsTrigger>
             ))}
           </TabsList>
@@ -247,13 +264,10 @@ export default function SapfBookingsPage() {
             <TabsContent key={item.value} value={item.value}>
               <div className="space-y-4">
                 {loadingTab === item.value ? (
-                  <Card>
-                    <CardContent className="py-6">
-                      <p className="text-sm text-muted-foreground">
-                        Loading...
-                      </p>
-                    </CardContent>
-                  </Card>
+                  <InlineLoadingState
+                    label="Loading requests"
+                    description="Fetching the latest booking records."
+                  />
                 ) : (
                   <RequestList
                     requests={filteredRequests}
@@ -275,6 +289,6 @@ export default function SapfBookingsPage() {
           ))}
         </Tabs>
       </MotionSection>
-    </MotionPage>
+    </PageShell>
   );
 }

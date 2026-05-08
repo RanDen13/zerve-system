@@ -55,7 +55,9 @@ const layout = async ({ children }: { children: React.ReactNode }) => {
         userName={session.user.name}
         userEmail={session.user.email}
       />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto pt-12 lg:pt-0">
+        {children}
+      </main>
       <TermsAndConditionsPrompt sessionId={session.session.id} />
       <GuidedTutorial
         userRole={userRole}

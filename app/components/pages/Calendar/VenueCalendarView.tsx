@@ -3,6 +3,7 @@
 import EventSpaceCard from "@/app/components/EventSpace/EventSpaceCard";
 import { ModeToggle } from "@/app/components/mode-toggle";
 import AllEventsCalendar from "@/app/components/pages/Calendar/AllEventsCalendar";
+import { EmptyState } from "@/app/components/UX";
 import { Button } from "@/app/components/ui/button";
 import {
   Card,
@@ -127,11 +128,18 @@ export default function VenueCalendarView({
 
   const filteredVenues = useMemo(() => {
     return venues.filter((venue) => {
-      const matchesSearch =
-        venue.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        venue.location.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCapacity = filterCapacity
-        ? venue.capacity >= Number(filterCapacity)
+      const normalizedSearch = searchQuery.trim().toLowerCase();
+      const matchesSearch = normalizedSearch
+        ? [venue.name, venue.location, venue.description]
+            .filter(Boolean)
+            .some((value) =>
+              String(value).toLowerCase().includes(normalizedSearch),
+            )
+        : true;
+      const requestedCapacity = Number(filterCapacity);
+      const matchesCapacity =
+        filterCapacity && Number.isFinite(requestedCapacity)
+          ? venue.capacity >= requestedCapacity
         : true;
       return matchesSearch && matchesCapacity;
     });
@@ -244,11 +252,11 @@ export default function VenueCalendarView({
       <div className="rounded-lg border border-white/15 bg-white/10 p-5 text-white shadow-2xl backdrop-blur-md lg:p-7">
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
-            <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">
+            <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-normal text-emerald-200">
               <CalendarDays className="h-3.5 w-3.5" />
               Zerve Calendar
             </p>
-            <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
+            <h1 className="text-3xl font-bold tracking-normal md:text-4xl">
               {title}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75 md:text-base">
@@ -301,7 +309,7 @@ export default function VenueCalendarView({
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-full ${panel.dotClassName}`}
                 />
-                <p className="min-w-0 text-xs font-semibold uppercase tracking-wide text-white/75">
+                <p className="min-w-0 text-xs font-semibold uppercase tracking-normal text-white/75">
                   {panel.label}
                 </p>
               </div>
@@ -388,6 +396,7 @@ export default function VenueCalendarView({
                     <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       id="calendar-search"
+                      type="search"
                       placeholder="e.g., Auditorium"
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
@@ -432,15 +441,11 @@ export default function VenueCalendarView({
           </div>
 
           {filteredVenues.length === 0 && (
-            <div className="py-12 text-center">
-              <Building2 className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
-              <h3 className="mb-2 text-xl font-semibold text-foreground">
-                No venues found
-              </h3>
-              <p className="text-muted-foreground">
-                Try adjusting your filters.
-              </p>
-            </div>
+            <EmptyState
+              title="No venues found"
+              description="Try adjusting your search or capacity filter."
+              icon={<Building2 className="h-6 w-6" />}
+            />
           )}
         </TabsContent>
       </Tabs>

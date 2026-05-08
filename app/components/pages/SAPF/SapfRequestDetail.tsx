@@ -1,5 +1,6 @@
 "use client";
 
+import { StatusBadge } from "@/app/components/UX";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
@@ -72,6 +73,19 @@ type SapfWeatherDay = {
   precipitationSum: number | null;
 };
 
+let weatherForecastCache: Promise<SapfWeatherDay[]> | null = null;
+
+async function loadWeatherForecast() {
+  if (!weatherForecastCache) {
+    weatherForecastCache = fetch("/api/weather/forecast")
+      .then((response) => (response.ok ? response.json() : { days: [] }))
+      .then((payload) => (Array.isArray(payload.days) ? payload.days : []))
+      .catch(() => []);
+  }
+
+  return weatherForecastCache;
+}
+
 function ButtonSpinner() {
   return <Loader2 className="mr-2 h-4 w-4 animate-spin" />;
 }
@@ -79,21 +93,6 @@ function ButtonSpinner() {
 function formatFileSize(bytes: number) {
   if (!bytes) return "0 MB";
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function statusClass(status: string) {
-  if (status === "APPROVED")
-    return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
-  if (status === "REJECTED")
-    return "bg-red-500/15 text-red-700 dark:text-red-400";
-  if (status === "CANCELLED" || status === "SKIPPED")
-    return "bg-muted text-muted-foreground";
-  if (status === "RETURNED_FOR_REVISION" || status === "RETURNED")
-    return "bg-orange-500/15 text-orange-700 dark:text-orange-400";
-  if (status === "ACTIVE" || status === "IN_REVIEW")
-    return "bg-blue-500/15 text-blue-700 dark:text-blue-400";
-  if (status === "DRAFT") return "bg-muted text-muted-foreground";
-  return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
 }
 
 function formatDateRange(request: any) {
@@ -170,9 +169,9 @@ function temperatureLabel(weather: SapfWeatherDay) {
     typeof weather.temperatureMin === "number"
       ? `${Math.round(weather.temperatureMin)}`
       : "";
-  if (max && min) return `${min}-${max}°C`;
-  if (max) return `${max}°C`;
-  if (min) return `${min}°C`;
+  if (max && min) return `${min}-${max} C`;
+  if (max) return `${max} C`;
+  if (min) return `${min} C`;
   return "";
 }
 
@@ -195,11 +194,9 @@ function RequestWeather({ request }: { request: any }) {
     let cancelled = false;
 
     async function loadWeather() {
-      const response = await fetch("/api/weather/forecast");
-      if (!response.ok) return;
-      const payload = await response.json();
+      const days = await loadWeatherForecast();
       if (!cancelled) {
-        setWeatherDays(Array.isArray(payload.days) ? payload.days : []);
+        setWeatherDays(days);
       }
     }
 
@@ -280,10 +277,11 @@ export function RequestSummary({
   )?.updatedAt;
 
   return (
-    <motion.div
+    <motion.article
       whileHover={{ y: -2 }}
       transition={{ type: "spring", stiffness: 320, damping: 24 }}
-      className="space-y-4 rounded-lg border bg-card/95 p-4 shadow-sm transition-shadow hover:shadow-md"
+      className="space-y-4 rounded-lg border bg-card/95 p-4 shadow-sm transition-shadow hover:border-primary/25 hover:shadow-md"
+      aria-label={`Request ${request.requestNumber || request.title}`}
     >
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
@@ -317,22 +315,20 @@ export function RequestSummary({
         </div>
         <div className="flex flex-wrap gap-2">
           {showBadges && (
-            <Badge className={statusClass(request.status)}>
-              {request.status.replaceAll("_", " ")}
-            </Badge>
+            <StatusBadge status={request.status} />
           )}
           {showConflict && request.conflictWarning && (
-            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400">
-              Pending conflict
-            </Badge>
+            <StatusBadge label="Pending conflict" tone="warning" />
           )}
           {request.setting === "Off-Campus" && (
-            <Badge className="bg-sky-300/30 text-sky-800 dark:bg-sky-300/15 dark:text-sky-200">
-              Off-campus
-            </Badge>
+            <StatusBadge label="Off-campus" tone="info" />
           )}
           {showPdf && request.status === "APPROVED" && (
-            <a href={`/api/sapf/${request.id}/pdf`} target="_blank">
+            <a
+              href={`/api/sapf/${request.id}/pdf`}
+              target="_blank"
+              rel="noreferrer"
+            >
               <Button size="sm" variant="outline">
                 <FileDown className="mr-2 h-4 w-4" />
                 Reservation PDF
@@ -343,7 +339,7 @@ export function RequestSummary({
         </div>
       </div>
       {showProgress && <ApprovalProgressTimeline request={request} compact />}
-    </motion.div>
+    </motion.article>
   );
 }
 
@@ -1547,9 +1543,6 @@ export function RequestDetail({
       <MotionSection>
         <RequestSummary request={request} />
       </MotionSection>
-      <MotionSection>
-        <SapfReadonlyDetails request={request} hidePart4={hideReadOnlyPart4} />
-      </MotionSection>
       {showReviewControls && (
         <MotionSection>
           <ChangeRequestReviewControls
@@ -1569,6 +1562,9 @@ export function RequestDetail({
           />
         </MotionSection>
       )}
+      <MotionSection>
+        <SapfReadonlyDetails request={request} hidePart4={hideReadOnlyPart4} />
+      </MotionSection>
       {showReviewControls && (
         <MotionSection>
           <SdsClearanceEditControls

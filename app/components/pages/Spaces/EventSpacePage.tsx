@@ -6,12 +6,11 @@ import VenueMonthCalendar, {
 } from "@/app/components/pages/Calendar/VenueMonthCalendar";
 import ErrorPopup from "@/app/components/Popup/ErrorPopup";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
+import { PageHeader, PageShell, StatCard, StatusBadge } from "@/app/components/UX";
 import { Button } from "@/app/components/ui/button";
-import { Card, CardContent } from "@/app/components/ui/card";
 import {
   MotionItem,
   MotionList,
-  MotionPage,
   MotionSection,
 } from "@/app/components/ui/motion";
 import {
@@ -158,20 +157,28 @@ const EventSpacePage = ({
   }
 
   return (
-    <MotionPage className="space-y-6 p-4 lg:p-8">
-      <MotionSection className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Button variant="outline" onClick={() => router.back()}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-        {canCreateReservation && eventSpace.status === "ACTIVE" && (
-          <Button asChild>
-            <Link href={`/user/bookings/create?venueId=${eventSpace.id}`}>
-              <Send className="mr-2 h-4 w-4" />
-              Create Booking
-            </Link>
-          </Button>
-        )}
+    <PageShell>
+      <MotionSection>
+        <PageHeader
+          title={eventSpace.name}
+          description={eventSpace.description}
+          actions={
+            <>
+              <Button variant="outline" onClick={() => router.back()}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </Button>
+              {canCreateReservation && eventSpace.status === "ACTIVE" && (
+                <Button asChild>
+                  <Link href={`/user/bookings/create?venueId=${eventSpace.id}`}>
+                    <Send className="mr-2 h-4 w-4" />
+                    Create Booking
+                  </Link>
+                </Button>
+              )}
+            </>
+          }
+        />
       </MotionSection>
 
       <MotionSection>
@@ -180,13 +187,6 @@ const EventSpacePage = ({
           alt={eventSpace.name}
           className="h-80 sm:h-96 lg:h-[32rem]"
         />
-      </MotionSection>
-
-      <MotionSection>
-        <h1 className="text-3xl font-bold text-foreground">
-          {eventSpace.name}
-        </h1>
-        <p className="mt-2 text-muted-foreground">{eventSpace.description}</p>
       </MotionSection>
 
       <Tabs defaultValue="details">
@@ -198,56 +198,43 @@ const EventSpacePage = ({
         <TabsContent value="details" className="mt-4">
           <MotionList className="grid gap-4 md:grid-cols-4">
             <MotionItem>
-              <Card className="panel-hover">
-                <CardContent className="flex items-center gap-3 p-5">
-                  <MapPin className="h-8 w-8 text-blue-600" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Location</p>
-                    <p className="font-semibold">{eventSpace.location}</p>
-                  </div>
-                </CardContent>
-              </Card>
+              <StatCard
+                label="Location"
+                value={eventSpace.location}
+                valueClassName="text-base"
+                icon={<MapPin className="h-5 w-5" />}
+                tone="info"
+              />
             </MotionItem>
             <MotionItem>
-              <Card className="panel-hover">
-                <CardContent className="flex items-center gap-3 p-5">
-                  <Users className="h-8 w-8 text-emerald-600" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Capacity</p>
-                    <p className="font-semibold">
-                      {eventSpace.capacity} people
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <StatCard
+                label="Capacity"
+                value={`${eventSpace.capacity} people`}
+                icon={<Users className="h-5 w-5" />}
+                tone="success"
+              />
             </MotionItem>
             <MotionItem>
-              <Card className="panel-hover">
-                <CardContent className="flex items-center gap-3 p-5">
-                  <CheckCircle className="h-8 w-8 text-emerald-600" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Status</p>
-                    <p className="font-semibold">
-                      {eventSpace.status.replaceAll("_", " ")}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <StatCard
+                label="Status"
+                value={<StatusBadge status={eventSpace.status} />}
+                valueClassName="text-base"
+                icon={<CheckCircle className="h-5 w-5" />}
+                tone={eventSpace.status === "ACTIVE" ? "success" : "warning"}
+              />
             </MotionItem>
             <MotionItem>
-              <Card className="panel-hover">
-                <CardContent className="flex items-center gap-3 p-5">
-                  <Calendar className="h-8 w-8 text-blue-600" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Booking</p>
-                    <p className="font-semibold">
-                      {Number((eventSpace as any).bookingAdvanceDays ?? 30) > 0
-                        ? `${(eventSpace as any).bookingAdvanceDays ?? 30} days advance`
-                        : "Immediate"}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <StatCard
+                label="Booking"
+                value={
+                  Number((eventSpace as any).bookingAdvanceDays ?? 30) > 0
+                    ? `${(eventSpace as any).bookingAdvanceDays ?? 30} days advance`
+                    : "Immediate"
+                }
+                valueClassName="text-base"
+                icon={<Calendar className="h-5 w-5" />}
+                tone="info"
+              />
             </MotionItem>
           </MotionList>
         </TabsContent>
@@ -260,7 +247,7 @@ const EventSpacePage = ({
           />
         </TabsContent>
       </Tabs>
-    </MotionPage>
+    </PageShell>
   );
 };
 

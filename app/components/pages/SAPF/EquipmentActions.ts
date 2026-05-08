@@ -192,14 +192,16 @@ async function sendEquipmentEmail({
   message,
   request,
   equipmentRows,
+  linkPath = "/user/equipment",
 }: {
   to: string;
   subject: string;
   message: string;
   request: any;
   equipmentRows: any[];
+  linkPath?: string;
 }) {
-  const link = absoluteUrl("/user/equipment");
+  const link = absoluteUrl(linkPath);
   await sendEmail(
     to,
     subject,
@@ -483,9 +485,16 @@ export async function getEquipmentWorkspace(): Promise<ActionResult<any>> {
         },
         include: {
           equipmentItem: true,
+          providedBy: { select: { id: true, name: true, email: true } },
+          returnedBy: { select: { id: true, name: true, email: true } },
           request: {
             include: {
               officer: { select: { id: true, name: true, email: true } },
+              venues: {
+                include: {
+                  eventSpace: { select: { id: true, name: true } },
+                },
+              },
               schedules: {
                 select: { id: true, startAt: true, endAt: true },
                 orderBy: { startAt: "asc" },
@@ -515,6 +524,57 @@ export async function getEquipmentWorkspace(): Promise<ActionResult<any>> {
     return {
       success: false,
       message: (error as Error).message || "Failed to load equipment workspace.",
+    };
+  }
+}
+
+export async function createDefaultEquipmentItems(): Promise<ActionResult<void>> {
+  try {
+    const user = await getSessionUser();
+    if (!user || !canManageEquipment(user.role)) {
+      return {
+        success: false,
+        message: "Only equipment provisioners can create equipment.",
+      };
+    }
+
+    for (const field of EQUIPMENT_SUPPORT_FIELDS) {
+      const existing = await (prisma as any).equipmentItem.findFirst({
+        where: {
+          OR: [{ supportLabel: field.supportLabel }, { name: field.defaultName }],
+        },
+      });
+
+      if (existing) {
+        await (prisma as any).equipmentItem.update({
+          where: { id: existing.id },
+          data: {
+            supportLabel: field.supportLabel,
+            active: true,
+          },
+        });
+      } else {
+        await (prisma as any).equipmentItem.create({
+          data: {
+            id: uuid(),
+            name: field.defaultName,
+            supportLabel: field.supportLabel,
+            totalQuantity: 0,
+            active: true,
+            createdById: user.id,
+          },
+        });
+      }
+    }
+
+    revalidatePath("/user/equipment");
+    revalidatePath("/user/bookings/create");
+    return { success: true, message: "Default equipment added." };
+  } catch (error) {
+    console.error("Default equipment create failed:", error);
+    return {
+      success: false,
+      message: (error as Error).message || "Failed to add default equipment.",
     };
   }
 }
@@ -642,6 +702,7 @@ export async function markEquipmentProvided(
         message: "Requested equipment was marked as provided.",
         request,
         equipmentRows: rows,
+        linkPath: `/user/bookings/${request.id}`,
       });
     }
 
@@ -786,6 +847,16 @@ export async function confirmEquipmentReturned(
       `${request.requestNumber} equipment was confirmed returned.`,
       request.id,
     );
+    if (request.officer?.email && request.officer.emailNotificationsEnabled !== false) {
+      await sendEquipmentEmail({
+        to: request.officer.email,
+        subject: `[Zerve] Equipment returned for ${request.requestNumber}`,
+        message: "Your requested equipment was confirmed returned.",
+        request,
+        equipmentRows: rows,
+        linkPath: `/user/bookings/${request.id}`,
+      });
+    }
     revalidatePath("/user/equipment");
     revalidatePath(`/user/bookings/${request.id}`);
     return { success: true, message: "Equipment returned to inventory." };
@@ -842,6 +913,17 @@ export async function notifyOfficerEquipmentStatusOnApproval(requestId: string) 
     `${request.requestNumber} is approved. Equipment provision status: not yet provided.`,
     request.id,
   );
+  if (request.officer?.email && request.officer.emailNotificationsEnabled !== false) {
+    await sendEquipmentEmail({
+      to: request.officer.email,
+      subject: `[Zerve] Equipment pending for ${request.requestNumber}`,
+      message:
+        "Your reservation is approved. Requested equipment is still pending provision.",
+      request,
+      equipmentRows: rows,
+      linkPath: `/user/bookings/${request.id}`,
+    });
+  }
 }
 
 export async function notifyProvisionersForEquipmentReturn(requestId: string) {
@@ -912,10 +994,34 @@ export async function sendEquipmentDueReminders() {
     const provisioners = await getEquipmentProvisioners();
 
     await Promise.all([
-      ...provisioners.map((provisioner) =>
-        createNotification(provisioner.id, "Equipment due soon", body, request.id),
-      ),
+      ...provisioners.map(async (provisioner) => {
+        await createNotification(
+          provisioner.id,
+          "Equipment due soon",
+          body,
+          request.id,
+        );
+        if (provisioner.email && provisioner.emailNotificationsEnabled !== false) {
+          await sendEquipmentEmail({
+            to: provisioner.email,
+            subject: `[Zerve] Equipment due soon for ${request.requestNumber}`,
+            message: body,
+            request,
+            equipmentRows: requestRows,
+          });
+        }
+      }),
       createNotification(request.officerId, "Equipment not yet provided", body, request.id),
+      request.officer?.email && request.officer.emailNotificationsEnabled !== false
+        ? sendEquipmentEmail({
+            to: request.officer.email,
+            subject: `[Zerve] Equipment not yet provided for ${request.requestNumber}`,
+            message: body,
+            request,
+            equipmentRows: requestRows,
+            linkPath: `/user/bookings/${request.id}`,
+          })
+        : Promise.resolve(),
       (prisma as any).sAPFEquipmentRequest.updateMany({
         where: { id: { in: requestRows.map((row: any) => row.id) } },
         data: { dueReminderSentAt: now },

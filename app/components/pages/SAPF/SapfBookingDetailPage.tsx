@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  Callout,
+  ErrorStateCard,
+  PageHeader,
+  PageShell,
+} from "@/app/components/UX";
 import ModalBase from "@/app/components/Popup/ModalBase";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
 import { Button } from "@/app/components/ui/button";
@@ -19,7 +25,6 @@ import {
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import {
-  ArrowLeft,
   FileDown,
   History,
   Loader2,
@@ -89,22 +94,18 @@ export default function SapfBookingDetailPage({
 
   if (!payload) {
     return (
-      <div className="p-4 lg:p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Booking details unavailable</CardTitle>
-            <CardDescription>
-              We could not load this booking right now.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <PageShell>
+        <ErrorStateCard
+          title="Booking details unavailable"
+          description="We could not load this booking right now."
+          action={
             <Button onClick={refresh} variant="outline">
               <RefreshCcw className="mr-2 h-4 w-4" />
               Try again
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          }
+        />
+      </PageShell>
     );
   }
 
@@ -231,25 +232,13 @@ export default function SapfBookingDetailPage({
   };
 
   return (
-    <div className="space-y-6 p-4 lg:p-8">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
-          <Button asChild variant="outline">
-            <Link href="/user/bookings">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Booking Details
-            </h1>
-            <p className="text-muted-foreground">
-              Track details, approvals, activity, and SDS-gated changes.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <PageShell>
+      <PageHeader
+        title="Booking Details"
+        description="Track details, approvals, activity, and SDS-gated changes."
+        backHref="/user/bookings"
+        actions={
+          <>
           {canEdit && (
             <Button asChild variant="outline">
               <Link href={`/user/bookings/create?requestId=${request.id}`}>
@@ -291,7 +280,11 @@ export default function SapfBookingDetailPage({
             </Button>
           )}
           <Button asChild variant="outline">
-            <a href={`/api/sapf/${request.id}/preview`} target="_blank">
+            <a
+              href={`/api/sapf/${request.id}/preview`}
+              target="_blank"
+              rel="noreferrer"
+            >
               <FileDown className="mr-2 h-4 w-4" />
               Preview Reservation
             </a>
@@ -330,23 +323,22 @@ export default function SapfBookingDetailPage({
             )}
             {loading ? "Refreshing..." : "Refresh"}
           </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {pendingChangeRequest && (
-        <div className="flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-950 dark:text-blue-100">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            <p className="font-semibold">
-              {pendingChangeRequest.type === "EDIT"
-                ? "Edit request pending SDS approval"
-                : "Cancellation request pending SDS approval"}
-            </p>
-            <p className="mt-1 text-blue-900/80 dark:text-blue-100/80">
-              {pendingChangeRequest.reason}
-            </p>
-          </div>
-        </div>
+        <Callout
+          tone="info"
+          icon={<ShieldCheck className="h-4 w-4" />}
+          title={
+            pendingChangeRequest.type === "EDIT"
+              ? "Edit request pending SDS approval"
+              : "Cancellation request pending SDS approval"
+          }
+        >
+          {pendingChangeRequest.reason}
+        </Callout>
       )}
 
       <Tabs defaultValue="details" className="space-y-4">
@@ -495,6 +487,6 @@ export default function SapfBookingDetailPage({
           </Card>
         </ModalBase>
       )}
-    </div>
+    </PageShell>
   );
 }
