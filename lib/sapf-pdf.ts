@@ -665,6 +665,9 @@ async function renderDataBackedPdf({
 }
 
 async function convertDocxToPdf(docxBytes: Buffer) {
+  const remotePdfBytes = await runRemoteDocxToPdf(docxBytes);
+  if (remotePdfBytes) return remotePdfBytes;
+
   const dir = await mkdtemp(path.join(tmpdir(), "sapf-pdf-"));
   const docxPath = path.join(dir, "sapf.docx");
   const pdfPath = path.join(dir, "sapf.pdf");
@@ -683,6 +686,74 @@ async function convertDocxToPdf(docxBytes: Buffer) {
   } finally {
     await rm(dir, { force: true, recursive: true });
   }
+}
+
+async function runRemoteDocxToPdf(docxBytes: Buffer) {
+  if (process.env.CONVERTAPI_TOKEN || process.env.CONVERTAPI_SECRET) {
+    return runConvertApiDocxToPdf(docxBytes);
+  }
+
+  return null;
+}
+
+async function runConvertApiDocxToPdf(docxBytes: Buffer) {
+  const token = process.env.CONVERTAPI_TOKEN;
+  const legacySecret = process.env.CONVERTAPI_SECRET;
+  const endpoint = new URL(
+    process.env.CONVERTAPI_ENDPOINT ||
+      "https://v2.convertapi.com/convert/docx/to/pdf",
+  );
+  const formData = new FormData();
+  const headers: HeadersInit = {
+    Accept: "application/json",
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  } else if (legacySecret) {
+    endpoint.searchParams.set("Secret", legacySecret);
+  }
+
+  formData.append("StoreFile", "false");
+  formData.append(
+    "File",
+    new Blob([new Uint8Array(docxBytes)], {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }),
+    "reservation.docx",
+  );
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(
+      `ConvertAPI DOCX-to-PDF failed with ${response.status}. ${errorText}`,
+    );
+  }
+
+  const result = await response.json();
+  const file = result?.Files?.[0];
+
+  if (file?.FileData) {
+    return Buffer.from(file.FileData, "base64");
+  }
+
+  if (file?.Url || file?.FileUrl) {
+    const pdfResponse = await fetch(file.Url || file.FileUrl);
+    if (!pdfResponse.ok) {
+      throw new Error(
+        `ConvertAPI converted file download failed with ${pdfResponse.status}.`,
+      );
+    }
+    return Buffer.from(await pdfResponse.arrayBuffer());
+  }
+
+  throw new Error("ConvertAPI did not return converted PDF data.");
 }
 
 async function appendVerificationPage({
