@@ -51,6 +51,15 @@ function jsonSafe<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 async function getSessionUser() {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -99,6 +108,20 @@ function formatSchedule(request: any) {
     .join(", ");
 }
 
+function formatScheduleHtml(request: any) {
+  const schedules = Array.isArray(request?.schedules) ? request.schedules : [];
+  if (!schedules.length) return "No schedule";
+
+  return schedules
+    .map(
+      (schedule: any) =>
+        `${escapeHtml(formatSapfDateForMessage(schedule.startAt))} ${escapeHtml(
+          formatSapfTime(schedule.startAt),
+        )}-${escapeHtml(formatSapfTime(schedule.endAt))}`,
+    )
+    .join("<br />");
+}
+
 function firstScheduleStart(request: any) {
   const schedules = Array.isArray(request?.schedules) ? request.schedules : [];
   const first = schedules[0]?.startAt;
@@ -128,6 +151,22 @@ function equipmentSummary(rows: any[]) {
   return rows
     .map((row) => `${row.equipmentItem?.name || "Equipment"} x ${row.quantity}`)
     .join(", ");
+}
+
+function equipmentRowsHtml(rows: any[]) {
+  if (!rows.length) return "<p style=\"margin:0;color:#64748b;font-size:14px;\">No equipment listed.</p>";
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+    ${rows
+      .map(
+        (row, index) => `
+    <tr>
+      <td style="padding:13px 16px;background:${index % 2 === 0 ? "#ffffff" : "#f8fafc"};border-bottom:1px solid #e5e7eb;color:#111827;font-size:14px;font-weight:750;">${escapeHtml(row.equipmentItem?.name || "Equipment")}</td>
+      <td align="right" style="padding:13px 16px;background:${index % 2 === 0 ? "#ffffff" : "#f8fafc"};border-bottom:1px solid #e5e7eb;color:#2563eb;font-size:14px;font-weight:850;">x ${escapeHtml(row.quantity)}</td>
+    </tr>`,
+      )
+      .join("")}
+  </table>`;
 }
 
 function userDisplayName(user: { name?: string | null; email?: string | null }) {
@@ -283,20 +322,78 @@ async function sendEquipmentEmail({
   linkPath?: string;
 }) {
   const link = absoluteUrl(linkPath);
-  await sendEmail(
-    to,
-    subject,
-    [
-      message,
-      "",
-      `Request: ${request.requestNumber} - ${request.title}`,
-      `Officer: ${request.officer?.name || "Unknown"}`,
-      `Schedule: ${formatSchedule(request)}`,
-      `Equipment: ${equipmentSummary(equipmentRows)}`,
-      "",
-      link,
-    ].join("\n"),
-  );
+  const text = [
+    message,
+    "",
+    `Request: ${request.requestNumber} - ${request.title}`,
+    `Officer: ${request.officer?.name || "Unknown"}`,
+    `Schedule: ${formatSchedule(request)}`,
+    `Equipment: ${equipmentSummary(equipmentRows)}`,
+    "",
+    link,
+  ].join("\n");
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>${escapeHtml(subject)}</title>
+  </head>
+  <body style="margin:0;background:#eef2f7;font-family:Inter,Segoe UI,Arial,sans-serif;color:#111827;">
+    <span style="display:none!important;opacity:0;color:transparent;height:0;width:0;overflow:hidden;">${escapeHtml(message)}</span>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2f7;padding:32px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 24px 60px rgba(15,23,42,.14);">
+            <tr>
+              <td style="padding:0;background:linear-gradient(135deg,#064e3b 0%,#0f766e 45%,#2563eb 100%);">
+                <div style="padding:28px 32px 44px;">
+                  <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#d1fae5;font-weight:800;">Zerve Equipment Desk</div>
+                  <h1 style="margin:18px 0 0;color:#ffffff;font-size:30px;line-height:1.18;font-weight:850;">Equipment update</h1>
+                  <p style="margin:14px 0 0;color:#dbeafe;font-size:15px;line-height:1.65;">${escapeHtml(message)}</p>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px;">
+                <div style="margin-top:14px;display:inline-block;background:#2563eb;color:#ffffff;border-radius:999px;padding:10px 16px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;box-shadow:0 10px 24px rgba(15,23,42,.18);">Equipment</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 32px 8px;">
+                <div style="font-size:12px;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:#64748b;">Booking Details</div>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+                  <tr>
+                    <td style="width:34%;padding:15px 18px;background:#f8fafc;border-bottom:1px solid #e5e7eb;color:#64748b;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Request</td>
+                    <td style="padding:15px 18px;border-bottom:1px solid #e5e7eb;color:#111827;font-size:14px;line-height:1.55;font-weight:650;">${escapeHtml(request.requestNumber)} - ${escapeHtml(request.title)}</td>
+                  </tr>
+                  <tr>
+                    <td style="width:34%;padding:15px 18px;background:#f8fafc;border-bottom:1px solid #e5e7eb;color:#64748b;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Officer</td>
+                    <td style="padding:15px 18px;border-bottom:1px solid #e5e7eb;color:#111827;font-size:14px;line-height:1.55;font-weight:650;">${escapeHtml(request.officer?.name || "Unknown")}</td>
+                  </tr>
+                  <tr>
+                    <td style="width:34%;padding:15px 18px;background:#f8fafc;border-bottom:1px solid #e5e7eb;color:#64748b;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Schedule</td>
+                    <td style="padding:15px 18px;border-bottom:1px solid #e5e7eb;color:#111827;font-size:14px;line-height:1.55;font-weight:650;">${formatScheduleHtml(request)}</td>
+                  </tr>
+                </table>
+                <div style="margin-top:18px;font-size:12px;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:#64748b;">Equipment</div>
+                <div style="margin-top:12px;">${equipmentRowsHtml(equipmentRows)}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 32px 34px;">
+                <a href="${escapeHtml(link)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;border-radius:12px;padding:14px 20px;font-size:14px;font-weight:850;">Open in Zerve</a>
+                <p style="margin:18px 0 0;color:#64748b;font-size:12px;line-height:1.55;">This is an automated equipment notification from Zerve. Please do not reply directly to this email.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  await sendEmail(to, subject, text, { html });
 }
 
 async function equipmentRowsForRequest(requestId: string) {

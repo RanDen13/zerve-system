@@ -191,7 +191,7 @@ export default function Home() {
     {
       role: "Approver",
       description: "Review assigned requests",
-      href: isLoggedIn ? "/user/approvals" : "/login",
+      href: isLoggedIn ? "/user/bookings" : "/login",
     },
     {
       role: "Admin",
