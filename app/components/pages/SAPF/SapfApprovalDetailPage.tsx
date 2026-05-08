@@ -224,7 +224,7 @@ export default function SapfApprovalDetailPage({
       <PageHeader
         title="Approval Details"
         description="Review the request, inspect activity, and complete the next workflow action."
-        backHref="/user/approvals"
+        backHref="/user/bookings"
         actions={
           <>
           {canSdsManage && (

@@ -232,11 +232,11 @@ export default function SapfBookingsPage() {
     <PageShell>
       <MotionSection>
         <PageHeader
-          title={me.role === "OFFICER" ? "My Requests" : "Review Tracking"}
+          title={me.role === "OFFICER" ? "My Requests" : "Bookings"}
           description={
             me.role === "OFFICER"
               ? "Drafts, active reservations, and closed requests in one searchable workspace."
-              : "Requests waiting for your action, requests you follow, and closed records."
+              : "Review active requests, follow workflow progress, and audit closed records."
           }
           actions={
             <>

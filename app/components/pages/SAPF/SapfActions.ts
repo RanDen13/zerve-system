@@ -18,6 +18,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { v4 as uuid } from "uuid";
 import {
+  lockSapfEquipmentForTransaction,
   notifyOfficerEquipmentStatusOnApproval,
   notifyProvisionersForEquipmentRequest,
   replaceSapfEquipmentRequests,
@@ -456,9 +457,9 @@ function isFinanceApproverUser(user: {
   return searchFields.some((value) => value.includes("finance"));
 }
 
-async function nextRequestNumber() {
+async function nextRequestNumber(db: SapfDbClient = prisma) {
   const year = new Date().getFullYear();
-  const count = await prisma.sAPFRequest.count({
+  const count = await db.sAPFRequest.count({
     where: {
       requestNumber: {
         startsWith: `${year}-`,
@@ -799,9 +800,11 @@ async function detectConflicts(
   venueIds: string[],
   slots: ScheduleRange[],
   excludeRequestId?: string,
+  db: SapfDbClient = prisma,
+  excludeBlockId?: string,
 ) {
   const [requests, blocks] = await Promise.all([
-    prisma.sAPFRequest.findMany({
+    db.sAPFRequest.findMany({
       where: {
         id: excludeRequestId ? { not: excludeRequestId } : undefined,
         venues: {
@@ -823,6 +826,7 @@ async function detectConflicts(
         requestNumber: true,
         title: true,
         status: true,
+        createdAt: true,
         schedules: {
           select: {
             startAt: true,
@@ -834,8 +838,9 @@ async function detectConflicts(
         },
       },
     }),
-    prisma.venueBlock.findMany({
+    db.venueBlock.findMany({
       where: {
+        id: excludeBlockId ? { not: excludeBlockId } : undefined,
         OR: [{ eventSpaceId: { in: venueIds } }, { eventSpaceId: null }],
       },
       select: {
@@ -878,6 +883,68 @@ async function detectConflicts(
     overlappingRequests,
     overlappingBlocks,
   };
+}
+
+function hasLiveScheduleConflict(conflict: Awaited<ReturnType<typeof detectConflicts>>) {
+  return conflict.overlappingBlocks.length > 0 || conflict.overlappingRequests.length > 0;
+}
+
+function conflictMessage(conflict: Awaited<ReturnType<typeof detectConflicts>>) {
+  const block = conflict.overlappingBlocks[0];
+  if (block) {
+    return `This schedule is blocked by "${block.title}". Choose another venue or time.`;
+  }
+
+  const request = conflict.overlappingRequests[0];
+  if (request) {
+    return `${request.requestNumber} already uses this venue and time. Bookings are first come, first served.`;
+  }
+
+  return "This venue and time is no longer available.";
+}
+
+async function lockVenueIdsForTransaction(
+  tx: Prisma.TransactionClient,
+  venueIds: string[],
+) {
+  const lockIds = [...new Set(venueIds)].sort();
+
+  for (const venueId of lockIds) {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${`sapf-venue:${venueId}`}))
+    `;
+  }
+}
+
+async function lockRequestNumberForTransaction(tx: Prisma.TransactionClient) {
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtext('sapf-request-number'))
+  `;
+}
+
+async function venueIdsForBlock(
+  eventSpaceId: string,
+  db: SapfDbClient = prisma,
+) {
+  if (eventSpaceId && eventSpaceId !== "ALL") {
+    const venue = await db.eventSpace.findUnique({
+      where: { id: eventSpaceId },
+      select: { id: true },
+    });
+
+    if (!venue) {
+      throw new Error("Selected venue was not found.");
+    }
+
+    return [venue.id];
+  }
+
+  const venues = await db.eventSpace.findMany({
+    select: { id: true },
+    orderBy: { name: "asc" },
+  });
+
+  return venues.map((venue) => venue.id);
 }
 
 function sapfListInclude() {
@@ -2291,16 +2358,16 @@ export async function saveSapfRequest(
       };
     }
 
+    const shouldReserveSlot = isSubmit || Boolean(existing && existing.status !== "DRAFT");
     const conflict = await detectConflicts(
       venueIds,
       scheduleSlots,
       requestId || undefined,
     );
-    if ((isSubmit || existing?.status !== "DRAFT") && conflict.hardConflict) {
+    if (shouldReserveSlot && hasLiveScheduleConflict(conflict)) {
       return {
         success: false,
-        message:
-          "This slot is blocked or already approved for another request.",
+        message: conflictMessage(conflict),
       };
     }
 
@@ -2376,7 +2443,7 @@ export async function saveSapfRequest(
       organization,
       department,
       attendeeCount,
-      conflictWarning: conflict.pendingConflict,
+      conflictWarning: shouldReserveSlot ? false : conflict.pendingConflict,
       ...sapfColumnData(sapf),
     };
     const selectedVenueNames = selectedVenues.map((venue) => venue.name);
@@ -2391,12 +2458,33 @@ export async function saveSapfRequest(
       : [];
 
     if (!existing) {
-      const requestNumber = await nextRequestNumber();
       request = await prisma.$transaction(async (tx) => {
+        await lockRequestNumberForTransaction(tx);
+        await lockVenueIdsForTransaction(tx, venueIds);
+        const lockedConflict = await detectConflicts(
+          venueIds,
+          scheduleSlots,
+          undefined,
+          tx,
+        );
+        if (shouldReserveSlot && hasLiveScheduleConflict(lockedConflict)) {
+          throw new Error(conflictMessage(lockedConflict));
+        }
+        requestData.conflictWarning = shouldReserveSlot
+          ? false
+          : lockedConflict.pendingConflict;
+        await lockSapfEquipmentForTransaction(tx, sapf);
+        await validateSapfEquipmentAvailability({
+          sapf,
+          scheduleSlots,
+          excludeRequestId: undefined,
+          db: tx,
+        });
+
         const created = await tx.sAPFRequest.create({
           data: {
             id: uuid(),
-            requestNumber,
+            requestNumber: await nextRequestNumber(tx),
             submissionKey: submissionKey || null,
             officerId: user.id,
             ...requestData,
@@ -2442,7 +2530,7 @@ export async function saveSapfRequest(
             : `${userDisplayName(user)} created a draft reservation.`,
           metadata: {
             status: isSubmit ? "IN_REVIEW" : "DRAFT",
-            conflictWarning: conflict.pendingConflict,
+            conflictWarning: requestData.conflictWarning,
           },
         });
         return created;
@@ -2456,6 +2544,27 @@ export async function saveSapfRequest(
         : null;
 
       request = await prisma.$transaction(async (tx) => {
+        await lockVenueIdsForTransaction(tx, venueIds);
+        const lockedConflict = await detectConflicts(
+          venueIds,
+          scheduleSlots,
+          existing.id,
+          tx,
+        );
+        if (shouldReserveSlot && hasLiveScheduleConflict(lockedConflict)) {
+          throw new Error(conflictMessage(lockedConflict));
+        }
+        requestData.conflictWarning = shouldReserveSlot
+          ? false
+          : lockedConflict.pendingConflict;
+        await lockSapfEquipmentForTransaction(tx, sapf);
+        await validateSapfEquipmentAvailability({
+          sapf,
+          scheduleSlots,
+          excludeRequestId: existing.id,
+          db: tx,
+        });
+
         const updated = await tx.sAPFRequest.update({
           where: { id: existing.id },
           data: {
@@ -2578,9 +2687,7 @@ export async function saveSapfRequest(
             existing?.status === "RETURNED_FOR_REVISION"
               ? ("RESUBMITTED" as any)
               : ("SUBMITTED" as any),
-          comment: conflict.pendingConflict
-            ? "Submitted with a pending-slot conflict warning."
-            : null,
+          comment: null,
         },
       });
 
@@ -2597,7 +2704,7 @@ export async function saveSapfRequest(
             ? `${userDisplayName(user)} resubmitted the revised reservation.`
             : `${userDisplayName(user)} submitted the reservation for approval.`,
           metadata: {
-            conflictWarning: conflict.pendingConflict,
+            conflictWarning: requestData.conflictWarning,
           },
         });
       }
@@ -2626,16 +2733,6 @@ export async function saveSapfRequest(
               ? "The officer has revised this reservation and sent it back to your queue. Please review the updates and choose the next action."
               : "A new reservation request has entered your approval queue. Please review the details and approve, reject, or return it for revision.",
         });
-      }
-
-      if (conflict.pendingConflict) {
-        await createNotification(
-          user.id,
-          "Pending slot warning",
-          "Another request is already pending for this slot. Your submission was still recorded.",
-          "CONFLICT",
-          request.id,
-        );
       }
 
       await notifyProvisionersForEquipmentRequest(request.id, "submitted");
@@ -2688,9 +2785,7 @@ export async function saveSapfRequest(
       message: isSdsEditor
         ? "Booking changes saved."
         : isSubmit
-          ? conflict.pendingConflict
-            ? "Reservation submitted with a pending-slot warning."
-            : "Reservation submitted successfully."
+          ? "Reservation submitted successfully."
           : "Draft saved.",
     };
   } catch (error) {
@@ -3806,22 +3901,19 @@ export async function reviewSapfRequest(
       }
     }
 
-    if (!nextStep) {
+    await prisma.$transaction(async (tx) => {
+      const venueIds = request.venues.map((venue) => venue.eventSpaceId);
+      await lockVenueIdsForTransaction(tx, venueIds);
       const conflict = await detectConflicts(
-        request.venues.map((venue) => venue.eventSpaceId),
+        venueIds,
         request.schedules,
         request.id,
+        tx,
       );
-      if (conflict.hardConflict) {
-        return {
-          success: false,
-          message:
-            "Final approval blocked because the slot now has an approved reservation or venue block.",
-        };
+      if (hasLiveScheduleConflict(conflict)) {
+        throw new Error(conflictMessage(conflict));
       }
-    }
 
-    await prisma.$transaction(async (tx) => {
       if (selectedDeanId && deanStep) {
         await tx.approvalStep.update({
           where: { id: deanStep.id },
@@ -5138,6 +5230,12 @@ export async function createVenueBlock(
     )
       ? (blockTypeInput as VenueBlockTypeValue)
       : "UNIVERSITY_WIDE";
+    if (blockType !== "UNIVERSITY_WIDE" && (!eventSpaceId || eventSpaceId === "ALL")) {
+      return {
+        success: false,
+        message: "Select a venue for venue-specific blocks.",
+      };
+    }
     const scheduleSlots = parseBlockScheduleSlots(data, blockType);
     validateBlockScheduleSlots(scheduleSlots, blockType);
 
@@ -5148,24 +5246,38 @@ export async function createVenueBlock(
       };
     }
 
-    await prisma.venueBlock.create({
-      data: {
-        id: uuid(),
-        eventSpaceId: eventSpaceId === "ALL" ? null : eventSpaceId,
-        type: blockType as any,
-        title: field(data, "title"),
-        reason: field(data, "reason") || null,
-        createdById: user.id,
-        schedules: {
-          createMany: {
-            data: scheduleSlots.map((slot) => ({
-              id: uuid(),
-              startAt: slot.startAt,
-              endAt: slot.endAt,
-            })),
+    await prisma.$transaction(async (tx) => {
+      const blockVenueIds = await venueIdsForBlock(eventSpaceId, tx);
+      await lockVenueIdsForTransaction(tx, blockVenueIds);
+      const conflict = await detectConflicts(
+        blockVenueIds,
+        scheduleSlots,
+        undefined,
+        tx,
+      );
+      if (hasLiveScheduleConflict(conflict)) {
+        throw new Error(conflictMessage(conflict));
+      }
+
+      await tx.venueBlock.create({
+        data: {
+          id: uuid(),
+          eventSpaceId: eventSpaceId === "ALL" ? null : eventSpaceId,
+          type: blockType as any,
+          title: field(data, "title"),
+          reason: field(data, "reason") || null,
+          createdById: user.id,
+          schedules: {
+            createMany: {
+              data: scheduleSlots.map((slot) => ({
+                id: uuid(),
+                startAt: slot.startAt,
+                endAt: slot.endAt,
+              })),
+            },
           },
         },
-      },
+      });
     });
 
     revalidatePath("/calendar");
@@ -5235,6 +5347,19 @@ export async function updateUniversityWideVenueBlock(
     }
 
     await prisma.$transaction(async (tx) => {
+      const blockVenueIds = await venueIdsForBlock("ALL", tx);
+      await lockVenueIdsForTransaction(tx, blockVenueIds);
+      const conflict = await detectConflicts(
+        blockVenueIds,
+        scheduleSlots,
+        undefined,
+        tx,
+        id,
+      );
+      if (hasLiveScheduleConflict(conflict)) {
+        throw new Error(conflictMessage(conflict));
+      }
+
       await tx.venueBlockSchedule.deleteMany({
         where: {
           venueBlockId: id,

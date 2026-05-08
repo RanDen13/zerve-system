@@ -16,7 +16,6 @@ import {
   Menu,
   PackageCheck,
   Settings,
-  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
@@ -63,12 +62,6 @@ const navItems: NavItem[] = [
     roles: ["OFFICER", "APPROVER", "ADMIN", "SUPER_ADMIN"],
   },
   {
-    label: "Approvals",
-    href: "/user/approvals",
-    icon: <ShieldCheck className="h-5 w-5" />,
-    roles: ["APPROVER", "ADMIN", "SUPER_ADMIN"],
-  },
-  {
     label: "Calendar",
     href: "/user/calendar",
     icon: <CalendarDays className="h-5 w-5" />,
@@ -96,7 +89,6 @@ const navItems: NavItem[] = [
 const navTourTargets: Record<string, string> = {
   "/user/dashboard": "nav-dashboard",
   "/user/bookings": "nav-bookings",
-  "/user/approvals": "nav-approvals",
   "/user/calendar": "nav-calendar",
   "/user/equipment": "nav-equipment",
   "/user/spaces": "nav-spaces",
@@ -104,6 +96,9 @@ const navTourTargets: Record<string, string> = {
 };
 
 function isNavActive(pathname: string, href: string) {
+  if (href === "/user/bookings" && pathname.startsWith("/user/approvals/")) {
+    return true;
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -134,9 +129,9 @@ function quickActionForRole(role: AppRole) {
     };
   }
   return {
-    href: "/user/approvals",
-    label: "Review approvals",
-    icon: <ShieldCheck className="h-4 w-4" />,
+    href: "/user/bookings",
+    label: "Review bookings",
+    icon: <History className="h-4 w-4" />,
   };
 }
 

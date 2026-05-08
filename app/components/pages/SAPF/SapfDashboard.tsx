@@ -165,7 +165,7 @@ export default function SapfDashboard() {
         ]
       : [
           {
-            href: "/user/approvals",
+            href: "/user/bookings",
             title: "Open review queue",
             description: "See requests waiting for your action now.",
             icon: <ShieldCheck className="h-5 w-5" />,
@@ -375,7 +375,7 @@ export default function SapfDashboard() {
                   </Button>
                 ) : (
                   <Button asChild variant="outline">
-                    <Link href="/user/approvals">Open approvals</Link>
+                    <Link href="/user/bookings">Open bookings</Link>
                   </Button>
                 )
               }

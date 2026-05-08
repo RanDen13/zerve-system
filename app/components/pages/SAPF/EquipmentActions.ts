@@ -322,15 +322,17 @@ async function usedQuantitiesByItem({
   itemIds,
   slots,
   excludeRequestId,
+  db = prisma,
 }: {
   itemIds: string[];
   slots: ScheduleRange[];
   excludeRequestId?: string;
+  db?: any;
 }) {
   const used = new Map<string, number>();
   if (!itemIds.length || !slots.length) return used;
 
-  const allocations = await (prisma as any).sAPFEquipmentRequest.findMany({
+  const allocations = await (db as any).sAPFEquipmentRequest.findMany({
     where: {
       equipmentItemId: { in: itemIds },
       requestId: excludeRequestId ? { not: excludeRequestId } : undefined,
@@ -365,19 +367,43 @@ async function usedQuantitiesByItem({
   return used;
 }
 
+export async function lockSapfEquipmentForTransaction(tx: any, sapf: any) {
+  const selections = sapfEquipmentSelections(sapf);
+  if (selections.length === 0) return;
+
+  const items = await tx.equipmentItem.findMany({
+    where: {
+      supportLabel: {
+        in: selections.flatMap((item) =>
+          supportLabelLookupValues(item.supportLabel),
+        ),
+      },
+    },
+    select: { id: true },
+  });
+
+  for (const item of items.map((item: any) => item.id).sort()) {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${`sapf-equipment:${item}`}))
+    `;
+  }
+}
+
 export async function validateSapfEquipmentAvailability({
   sapf,
   scheduleSlots,
   excludeRequestId,
+  db = prisma,
 }: {
   sapf: any;
   scheduleSlots: ScheduleRange[];
   excludeRequestId?: string;
+  db?: any;
 }) {
   const selections = sapfEquipmentSelections(sapf);
   if (selections.length === 0) return;
 
-  const items = await (prisma as any).equipmentItem.findMany({
+  const items = await (db as any).equipmentItem.findMany({
     where: {
       supportLabel: {
         in: selections.flatMap((item) =>
@@ -396,6 +422,7 @@ export async function validateSapfEquipmentAvailability({
     itemIds: items.map((item: any) => item.id),
     slots: scheduleSlots,
     excludeRequestId,
+    db,
   });
 
   for (const selection of selections) {
