@@ -155,25 +155,20 @@ function docxSupportRows(request: any, part2: any) {
       supportDetails: "",
     };
   });
-  const specialItems = [];
 
-  if (short(part2.otherSupport).trim()) {
-    specialItems.push({
-      supportChecked: "",
-      supportName: "OTHERS",
-      supportQuantity: textField(part2.otherSupport),
-      supportDetails: "",
-    });
-  }
+  equipmentItems.push({
+    supportChecked: "",
+    supportName: "OTHERS",
+    supportQuantity: textField(part2.otherSupport),
+    supportDetails: "",
+  });
 
-  if (short(part2.extraProvisions).trim()) {
-    specialItems.push({
-      supportChecked: "",
-      supportName: "PROVISION FOR STUDENTS WITH DIVERSE NEEDS",
-      supportQuantity: textField(part2.extraProvisions),
-      supportDetails: "",
-    });
-  }
+  equipmentItems.push({
+    supportChecked: "",
+    supportName: "PROVISION FOR STUDENTS WITH DIVERSE NEEDS",
+    supportQuantity: textField(part2.extraProvisions),
+    supportDetails: "",
+  });
 
   const rows: Array<Record<string, string>> = [];
   const pushPairs = (items: typeof equipmentItems) => {
@@ -194,7 +189,6 @@ function docxSupportRows(request: any, part2: any) {
   };
 
   pushPairs(equipmentItems);
-  pushPairs(specialItems);
 
   return rows;
 }
