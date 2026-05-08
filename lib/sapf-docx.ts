@@ -1,5 +1,10 @@
 import { getSapfParts } from "@/app/components/pages/SAPF/sapfData";
 import {
+  EQUIPMENT_SUPPORT_FIELDS,
+  equipmentFieldForSupportLabel,
+  normalizeSupportRequestLabel,
+} from "@/app/components/pages/SAPF/sapfEquipment";
+import {
   formatSapfDateForMessage,
   formatSapfTime,
   sapfCalendarDate,
@@ -78,6 +83,120 @@ function short(value: any) {
 function textField(value: any) {
   const text = short(value).trim();
   return text || "N/A";
+}
+
+function supportQuantity(part2: any, supportLabel: string) {
+  const field = equipmentFieldForSupportLabel(supportLabel);
+  if (!field) return "";
+  return textField(part2[field.quantityField]);
+}
+
+function selectedEquipmentSupports(part2: any): Set<string> {
+  const supportRequests = Array.isArray(part2.supportRequests)
+    ? part2.supportRequests
+    : [];
+
+  const selected = new Set<string>();
+
+  for (const support of supportRequests) {
+    const label = normalizeSupportRequestLabel(String(support));
+    if (equipmentFieldForSupportLabel(label)) selected.add(label);
+  }
+
+  return selected;
+}
+
+function venueEquipmentSupports(request: any): Set<string> {
+  const labels = new Set<string>();
+  const venues = Array.isArray(request.venues) ? request.venues : [];
+
+  for (const venue of venues) {
+    const amenities = Array.isArray(venue?.eventSpace?.amenities)
+      ? venue.eventSpace.amenities
+      : [];
+
+    for (const amenity of amenities) {
+      if (amenity?.active === false || !amenity?.supportLabel) continue;
+
+      const label = normalizeSupportRequestLabel(String(amenity.supportLabel));
+      if (equipmentFieldForSupportLabel(label)) labels.add(label);
+    }
+  }
+
+  return labels;
+}
+
+function orderedEquipmentLabels(labels: Set<string>) {
+  const known: string[] = EQUIPMENT_SUPPORT_FIELDS.map(
+    (field) => field.supportLabel,
+  );
+  const custom = Array.from(labels)
+    .filter((label) => !known.includes(label))
+    .sort((a, b) => a.localeCompare(b));
+
+  return [...known.filter((label) => labels.has(label)), ...custom];
+}
+
+function supportRowMarker(value: boolean) {
+  return value ? "(X)" : "";
+}
+
+function docxSupportRows(request: any, part2: any) {
+  const selected = selectedEquipmentSupports(part2);
+  const enabled = venueEquipmentSupports(request);
+  const labels = enabled.size > 0 ? enabled : selected;
+  const equipmentItems = orderedEquipmentLabels(labels).map((support) => {
+    const isChecked = selected.has(support);
+
+    return {
+      supportChecked: supportRowMarker(isChecked),
+      supportName: support.toUpperCase(),
+      supportQuantity: isChecked ? supportQuantity(part2, support) : "",
+      supportDetails: "",
+    };
+  });
+  const specialItems = [];
+
+  if (short(part2.otherSupport).trim()) {
+    specialItems.push({
+      supportChecked: "",
+      supportName: "OTHERS",
+      supportQuantity: textField(part2.otherSupport),
+      supportDetails: "",
+    });
+  }
+
+  if (short(part2.extraProvisions).trim()) {
+    specialItems.push({
+      supportChecked: "",
+      supportName: "PROVISION FOR STUDENTS WITH DIVERSE NEEDS",
+      supportQuantity: textField(part2.extraProvisions),
+      supportDetails: "",
+    });
+  }
+
+  const rows: Array<Record<string, string>> = [];
+  const pushPairs = (items: typeof equipmentItems) => {
+    for (let index = 0; index < items.length; index += 2) {
+      const left = items[index];
+      const right = items[index + 1];
+
+      rows.push({
+        ...left,
+        leftChecked: left?.supportChecked || "",
+        leftName: left?.supportName || "",
+        leftQuantity: left?.supportQuantity || "",
+        rightChecked: right?.supportChecked || "",
+        rightName: right?.supportName || "",
+        rightQuantity: right?.supportQuantity || "",
+      });
+    }
+  };
+
+  pushPairs(equipmentItems);
+  pushPairs(specialItems);
+
+  return rows;
 }
 
 function marker(value: boolean) {
@@ -468,6 +587,7 @@ export async function renderSapfDocx({ request }: { request: any }) {
     supportTableCount: textField(part2.longTableQty),
     supportChairs: marker(includes(part2.supportRequests, "Chairs")),
     supportChairsCount: textField(part2.chairsQty),
+    supportTableRows: docxSupportRows(request, part2),
     extraProvisions: textField(part2.extraProvisions),
     otherSupport: textField(part2.otherSupport),
 

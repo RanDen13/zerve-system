@@ -48,6 +48,18 @@ function validateImageFiles(files: File[]) {
   return null;
 }
 
+async function activeAmenityIds(ids?: string[]) {
+  if (!ids?.length) return [];
+  const rows = await prisma.amenity.findMany({
+    where: {
+      id: { in: ids },
+      active: true,
+    },
+    select: { id: true },
+  });
+  return rows.map((row) => row.id);
+}
+
 function canManageVenues(role?: string | null) {
   return ["ADMIN", "SUPER_ADMIN"].includes(role?.toUpperCase() || "");
 }
@@ -291,6 +303,7 @@ export async function getAllAmenities(): Promise<ActionResult<Amenity[]>> {
     }
 
     const amenities = await prisma.amenity.findMany({
+      where: { active: true },
       orderBy: { name: "asc" },
     });
 
@@ -343,9 +356,9 @@ export async function createEventSpace(
 
     // Parse amenities from JSON string if present
     const amenitiesData = data.get("amenities");
-    const amenities = amenitiesData
+    const amenities = await activeAmenityIds(amenitiesData
       ? JSON.parse(amenitiesData as string)
-      : validatedData.amenities;
+      : validatedData.amenities);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { amenities: _amenities, ...restData } = validatedData;
@@ -361,7 +374,7 @@ export async function createEventSpace(
             id: uuid(),
             ...restData,
             image: imageBuffers[0] || undefined,
-            amenities: amenities
+            amenities: amenities.length
               ? {
                   connect: amenities.map((id: string) => ({ id })),
                 }
@@ -455,9 +468,9 @@ export async function updateEventSpace(
 
     // Parse amenities from JSON string if present
     const amenitiesData = data.get("amenities");
-    const amenities = amenitiesData
+    const amenities = await activeAmenityIds(amenitiesData
       ? JSON.parse(amenitiesData as string)
-      : validatedAmenities;
+      : validatedAmenities);
 
     // If amenities are provided, first disconnect all existing amenities, then connect new ones
     const amenitiesUpdate = amenities

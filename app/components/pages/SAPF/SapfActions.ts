@@ -26,7 +26,10 @@ import {
   validateSapfEquipmentAvailability,
 } from "./EquipmentActions";
 import { normalizeSapfRequest } from "./sapfData";
-import { normalizeSupportRequestLabel } from "./sapfEquipment";
+import {
+  EQUIPMENT_SUPPORT_LABELS,
+  normalizeSupportRequestLabel,
+} from "./sapfEquipment";
 import {
   syncSapfOperationalStatusById,
   syncSapfOperationalStatuses,
@@ -75,6 +78,7 @@ const DEFAULT_BOOKING_ADVANCE_DAYS = 30;
 const MAX_SDS_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const MAX_PROGRAM_FLOW_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const APPROVAL_TIMEOUT_DAYS = 3;
+const SAPF_TRANSACTION_OPTIONS = { timeout: 20_000 };
 const APPROVAL_TIMEOUT_DAYS_BY_POSITION: Record<string, number> = {
   ADVISER: 3,
   DEAN: 3,
@@ -1226,6 +1230,23 @@ function validateSapfRequiredFields(
   }
   if (wasReturnedForRevision && !String(revisionSummary || "").trim()) {
     throw new Error("Add a comment explaining what changed before resubmitting.");
+  }
+}
+
+function validateVenueSupportRequests(sapf: ReturnType<typeof buildSapfPayload>, venue: any) {
+  const enabledEquipmentSupports = new Set(
+    (venue?.amenities || [])
+      .filter((amenity: any) => amenity.active !== false && amenity.supportLabel)
+      .map((amenity: any) => normalizeSupportRequestLabel(amenity.supportLabel)),
+  );
+  const blockedSupport = sapf.supportRequests.find(
+    (value) =>
+      EQUIPMENT_SUPPORT_LABELS.includes(value as any) &&
+      !enabledEquipmentSupports.has(value),
+  );
+
+  if (blockedSupport) {
+    throw new Error(`${blockedSupport} is not enabled for the selected venue.`);
   }
 }
 
@@ -2456,6 +2477,7 @@ export async function saveSapfRequest(
 
     const selectedVenues = await prisma.eventSpace.findMany({
       where: { id: { in: venueIds } },
+      include: { amenities: true },
       orderBy: { name: "asc" },
     });
 
@@ -2508,6 +2530,7 @@ export async function saveSapfRequest(
 
     const sapf = buildSapfPayload(data);
     sapf.venue = selectedVenues[0]?.name || "";
+    validateVenueSupportRequests(sapf, selectedVenues[0]);
     validateSapfRequiredFields(sapf, {
       selectedVenue: selectedVenues[0],
       participantCount,
@@ -2676,7 +2699,7 @@ export async function saveSapfRequest(
           },
         });
         return created;
-      });
+      }, SAPF_TRANSACTION_OPTIONS);
     } else {
       const resubmittedAt = new Date();
       const revisionSummary = field(data, "revisionSummary");
@@ -2813,7 +2836,7 @@ export async function saveSapfRequest(
         }
 
         return updated;
-      });
+      }, SAPF_TRANSACTION_OPTIONS);
     }
 
     if (isSubmit) {

@@ -168,18 +168,39 @@ async function main() {
 
   const amenities = await Promise.all(
     [
-      ["a1", "WiFi", "wifi"],
-      ["a2", "Projector", "projector"],
-      ["a3", "Sound System", "sound"],
-      ["a4", "Stage", "stage"],
-      ["a5", "Air Conditioning", "air"],
-      ["a6", "Tables", "tables"],
-      ["a7", "Chairs", "chairs"],
-    ].map(([id, name, icon]) =>
+      { id: "a1", name: "WiFi", icon: "wifi", supportLabel: null },
+      {
+        id: "a2",
+        name: "Projector",
+        icon: "projector",
+        supportLabel: "LCD Projector",
+      },
+      {
+        id: "a3",
+        name: "Sound System",
+        icon: "sound",
+        supportLabel: "Sound System",
+      },
+      { id: "a4", name: "Stage", icon: "stage", supportLabel: null },
+      {
+        id: "a5",
+        name: "Air Conditioning",
+        icon: "air",
+        supportLabel: null,
+      },
+      { id: "a6", name: "Tables", icon: "tables", supportLabel: "Tables" },
+      { id: "a7", name: "Chairs", icon: "chairs", supportLabel: "Chairs" },
+      {
+        id: "a8",
+        name: "Microphone",
+        icon: "microphone",
+        supportLabel: "Microphone",
+      },
+    ].map(({ id, name, icon, supportLabel }) =>
       prisma.amenity.upsert({
         where: { id },
-        update: { name, icon },
-        create: { id, name, icon },
+        update: { name, icon, supportLabel: supportLabel || undefined, active: true },
+        create: { id, name, icon, supportLabel: supportLabel || undefined, active: true },
       }),
     ),
   );

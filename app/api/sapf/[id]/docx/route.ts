@@ -56,7 +56,16 @@ export async function GET(
     where: requestWhere,
     include: {
       officer: true,
-      venues: { include: { eventSpace: true }, orderBy: { createdAt: "asc" } },
+      venues: {
+        include: {
+          eventSpace: {
+            include: {
+              amenities: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
       schedules: { orderBy: { startAt: "asc" } },
       coreValues: { select: { value: true }, orderBy: { createdAt: "asc" } },
       graduateAttributes: {

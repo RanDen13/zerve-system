@@ -173,6 +173,48 @@ function equipmentRowsHtml(rows: any[]) {
   </table>`;
 }
 
+async function syncEquipmentAmenity({
+  name,
+  supportLabel,
+  active,
+}: {
+  name: string;
+  supportLabel: string | null;
+  active: boolean;
+}) {
+  if (!supportLabel) return;
+
+  const existing = await prisma.amenity.findFirst({
+    where: {
+      OR: [{ supportLabel }, { name }],
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    await prisma.amenity.update({
+      where: { id: existing.id },
+      data: {
+        name,
+        supportLabel,
+        active,
+        icon: supportLabel.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+      },
+    });
+    return;
+  }
+
+  await prisma.amenity.create({
+    data: {
+      id: uuid(),
+      name,
+      supportLabel,
+      active,
+      icon: supportLabel.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+    },
+  });
+}
+
 function userDisplayName(user: { name?: string | null; email?: string | null }) {
   return user.name || user.email || "A user";
 }
@@ -785,6 +827,11 @@ export async function createDefaultEquipmentItems(): Promise<ActionResult<void>>
             active: true,
           },
         });
+        await syncEquipmentAmenity({
+          name: field.defaultName,
+          supportLabel: field.supportLabel,
+          active: true,
+        });
       } else {
         await (prisma as any).equipmentItem.create({
           data: {
@@ -795,6 +842,11 @@ export async function createDefaultEquipmentItems(): Promise<ActionResult<void>>
             active: true,
             createdById: user.id,
           },
+        });
+        await syncEquipmentAmenity({
+          name: field.defaultName,
+          supportLabel: field.supportLabel,
+          active: true,
         });
       }
     }
@@ -868,10 +920,12 @@ export async function saveEquipmentItem(
         },
       });
     }
+    await syncEquipmentAmenity({ name, supportLabel, active });
 
     revalidatePath("/user/equipment");
     revalidatePath("/user/dashboard");
     revalidatePath("/user/bookings/create");
+    revalidatePath("/user/spaces");
     return { success: true, message: "Equipment saved." };
   } catch (error) {
     console.error("Equipment save failed:", error);

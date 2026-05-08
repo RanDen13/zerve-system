@@ -70,7 +70,7 @@ model EventSpace {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   image             Bytes?
-  amenities         Amenity[]
+  amenities         Amenity[]          @relation("EventSpaceAmenities")
   images            EventSpaceImage[]
   sapfRequestVenues SAPFRequestVenue[]
   venueBlocks       VenueBlock[]
@@ -91,13 +91,14 @@ model EventSpaceImage {
 }
 
 model Amenity {
-  id           String      @id
+  id           String       @id
   name         String
   icon         String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  eventSpaceId String?
-  eventSpace   EventSpace? @relation(fields: [eventSpaceId], references: [id])
+  supportLabel String?      @unique
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  eventSpaces  EventSpace[] @relation("EventSpaceAmenities")
 
   @@map("amenity")
 }

@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ChangeEvent, FormEvent } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EventSpaceData } from "../Spaces/schema";
 import { saveSapfRequest } from "./SapfActions";
 import {
@@ -52,6 +52,7 @@ import {
   SUPPORT_REQUEST_OPTIONS,
 } from "./sapfData";
 import {
+  EQUIPMENT_SUPPORT_LABELS,
   equipmentFieldForSupportLabel,
   normalizeSupportRequestLabel,
   parseEquipmentQuantity,
@@ -157,6 +158,27 @@ function isFinanceSignatoryUser(user: any) {
 function createSubmissionKey() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 }
+
+const REQUIRED_FIELD_LABELS: Record<string, string> = {
+  activityTitle: "Activity title",
+  organization: "Organization",
+  programCourse: "Program/course",
+  offCampAgree: "Off-campus agreement",
+  personnelInCharge: "Personnel-in-charge",
+  attire: "Attire",
+  noOfParticipants: "No. of participants",
+  program: "Program",
+  rationale: "Rationale",
+  objectives: "Objectives",
+  programFlow: "Program flow",
+  emergencyPlan: "Emergency plan",
+  budget: "Personal budget",
+  sourceOfBudget: "Source of budget",
+  budgetRequestedAmount: "Requested budget amount",
+  budgetPurpose: "Budget purpose",
+  budgetBreakdown: "Budget breakdown",
+  revisionSummary: "Revision comment",
+};
 
 function positionLabel(position: string) {
   if (position === "SDS") return "SDS/Admin";
@@ -268,6 +290,44 @@ function getRequestScheduleRows(initialRequest?: any): ScheduleRow[] {
     : [createScheduleRow()];
 }
 
+function addUniqueMissing(items: string[], item: string) {
+  if (!items.includes(item)) items.push(item);
+}
+
+function labelForRequiredElement(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) {
+  if (element.name === "scheduleDate") return "Schedule date";
+  if (element.name === "scheduleStartTime") return "Schedule start time";
+  if (element.name === "scheduleEndTime") return "Schedule end time";
+  if (REQUIRED_FIELD_LABELS[element.name]) return REQUIRED_FIELD_LABELS[element.name];
+
+  const idLabel = element.id
+    ? element.ownerDocument.querySelector(`label[for="${CSS.escape(element.id)}"]`)
+    : null;
+  const nearbyLabel = element.closest("div")?.querySelector("label");
+  const label = idLabel || nearbyLabel;
+  const text = label?.textContent?.replace("*", "").trim();
+  return text || element.name || "Required field";
+}
+
+function nativeMissingRequiredLabels(form: HTMLFormElement | null) {
+  if (!form) return [];
+
+  const missing: string[] = [];
+  const requiredElements = form.querySelectorAll<
+    HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+  >("input[required], textarea[required], select[required]");
+
+  requiredElements.forEach((element) => {
+    if (element.disabled || element.type === "hidden" || element.validity.valid) {
+      return;
+    }
+
+    addUniqueMissing(missing, labelForRequiredElement(element));
+  });
+
+  return missing;
+}
+
 function selectedVenueIdsFromRequest(initialRequest?: any) {
   const joined = (initialRequest?.venues || [])
     .map((item: any) => item.eventSpaceId || item.eventSpace?.id)
@@ -306,6 +366,7 @@ export default function SapfBookingForm({
     String(initialRequest?.sapfPart1?.noOfParticipants || ""),
   );
   const [nativeFormReady, setNativeFormReady] = useState(false);
+  const [nativeMissingFields, setNativeMissingFields] = useState<string[]>([]);
   const [capacityWarning, setCapacityWarning] = useState("");
   const [programFlowAttachmentTotal, setProgramFlowAttachmentTotal] =
     useState(0);
@@ -474,12 +535,27 @@ export default function SapfBookingForm({
     useState(initialAdviserId);
   const [selectedAdditionalSignatoryIds, setSelectedAdditionalSignatoryIds] =
     useState<string[]>(Array.from(initialAdditionalSignatories));
+  const updateFormValidity = () => {
+    const form = formRef.current;
+    setNativeFormReady(form ? form.checkValidity() : false);
+    setNativeMissingFields(nativeMissingRequiredLabels(form));
+  };
+
+  useEffect(() => {
+    updateFormValidity();
+  }, [formKey]);
+
   const activeVenues = venues.filter((venue) => venue.status === "ACTIVE");
   const selectedVenues = activeVenues.filter((venue) =>
     selectedVenueIds.includes(venue.id),
   );
   const selectedVenue = selectedVenues[0] || null;
   const selectedVenueCapacity = Number(selectedVenue?.capacity || 0);
+  const selectedVenueEquipmentSupportKey = (selectedVenue?.amenities || [])
+    .filter((amenity: any) => amenity?.active !== false && amenity?.supportLabel)
+    .map((amenity: any) => normalizeSupportRequestLabel(amenity.supportLabel))
+    .sort()
+    .join("|");
   const scheduleRanges = useMemo(
     () => scheduleRangesFromRows(scheduleRows),
     [scheduleRows],
@@ -493,21 +569,23 @@ export default function SapfBookingForm({
     });
     return mapped;
   }, [equipmentItems]);
-  const supportOptions = useMemo(
-    () =>
-      Array.from(
-        new Set([
-          ...SUPPORT_REQUEST_OPTIONS,
-          ...equipmentItems
-            .map((item) => item.supportLabel)
-            .filter(Boolean)
-            .map((label) => normalizeSupportRequestLabel(String(label)))
-            .filter(
-              (label) => !SUPPORT_REQUEST_OPTIONS.includes(label as any),
-            ),
-        ]),
-      ),
-    [equipmentItems],
+  const venueEquipmentSupports = new Set(
+    selectedVenueEquipmentSupportKey
+      ? selectedVenueEquipmentSupportKey.split("|")
+      : [],
+  );
+  const fixedSupportOptions = SUPPORT_REQUEST_OPTIONS.filter(
+    (label) => !EQUIPMENT_SUPPORT_LABELS.includes(label as any),
+  );
+  const equipmentSupportOptions = equipmentItems
+    .filter((item) => item.active && item.supportLabel)
+    .map((item) => normalizeSupportRequestLabel(String(item.supportLabel)))
+    .filter((label) => venueEquipmentSupports.has(label));
+  const supportOptions = Array.from(
+    new Set([...fixedSupportOptions, ...equipmentSupportOptions]),
+  );
+  const activeSelectedSupportValues = selectedSupportValues.filter((value) =>
+    supportOptions.includes(value),
   );
   const equipmentAvailabilityBySupport = useMemo(() => {
     const mapped = new Map<
@@ -567,7 +645,7 @@ export default function SapfBookingForm({
       : "immediately";
   const adviserOptions = approvers.ADVISER || [];
   const additionalSignatoryOptions = approvers.ADDITIONAL_SIGNATORY || [];
-  const budgetSupportSelected = selectedSupportValues.includes("Budget");
+  const budgetSupportSelected = activeSelectedSupportValues.includes("Budget");
   const financeSignatoryOptions = additionalSignatoryOptions.filter(
     isFinanceSignatoryUser,
   );
@@ -629,10 +707,7 @@ export default function SapfBookingForm({
   const toggleVenue = (venueId: string, checked: boolean) => {
     setSelectedVenueIds(checked ? [venueId] : []);
     if (checked) setVenuePopoverOpen(false);
-    setTimeout(() => {
-      const form = formRef.current;
-      setNativeFormReady(form ? form.checkValidity() : false);
-    }, 0);
+    setTimeout(updateFormValidity, 0);
   };
 
   const removeVenue = (venueId: string) => {
@@ -809,7 +884,7 @@ export default function SapfBookingForm({
       return;
     }
 
-    for (const supportValue of selectedSupportValues) {
+    for (const supportValue of activeSelectedSupportValues) {
       const availability = equipmentAvailabilityBySupport.get(supportValue);
       const fieldInfo = equipmentFieldForSupportLabel(supportValue);
       if (!availability || !fieldInfo) continue;
@@ -888,6 +963,27 @@ export default function SapfBookingForm({
     Boolean(selectedPersonnelId) &&
     !programFlowAttachmentLimitExceeded &&
     !capacityWarning;
+  const missingSubmitItems = [...nativeMissingFields];
+  if (selectedVenueIds.length !== 1) {
+    addUniqueMissing(missingSubmitItems, "Venue");
+  }
+  if (!selectedPersonnelId) {
+    addUniqueMissing(missingSubmitItems, "Personnel-in-charge");
+  }
+  if (!approvalComplete) {
+    if (!selectedAdviserId) addUniqueMissing(missingSubmitItems, "Adviser");
+    if (hasMissingChainOptions) {
+      missingChainLabels.forEach((label) =>
+        addUniqueMissing(missingSubmitItems, `Approver: ${label}`),
+      );
+    }
+  }
+  if (capacityWarning) {
+    addUniqueMissing(missingSubmitItems, "Participant count within venue capacity");
+  }
+  if (programFlowAttachmentLimitExceeded) {
+    addUniqueMissing(missingSubmitItems, "Program flow attachments under 25 MB");
+  }
   const formProgressSteps = [
     {
       href: "#form-venues",
@@ -899,7 +995,7 @@ export default function SapfBookingForm({
     {
       href: "#form-support",
       label: "Support",
-      done: selectedSupportValues.length > 0,
+      done: activeSelectedSupportValues.length > 0,
     },
     { href: "#form-approval", label: "Approval", done: approvalComplete },
   ];
@@ -999,8 +1095,8 @@ export default function SapfBookingForm({
               {" "}
               {scheduleRows.length} day{scheduleRows.length === 1 ? "" : "s"}.
               {" "}
-              {selectedSupportValues.length} support item
-              {selectedSupportValues.length === 1 ? "" : "s"}.
+              {activeSelectedSupportValues.length} support item
+              {activeSelectedSupportValues.length === 1 ? "" : "s"}.
             </p>
           </div>
           <div className="rounded-md border bg-background px-3 py-2">
@@ -1412,10 +1508,7 @@ export default function SapfBookingForm({
               value={selectedPersonnelId}
               onValueChange={(value) => {
                 setSelectedPersonnelId(value);
-                setTimeout(() => {
-                  const form = formRef.current;
-                  setNativeFormReady(form ? form.checkValidity() : false);
-                }, 0);
+                setTimeout(updateFormValidity, 0);
               }}
               required
             >
@@ -1704,7 +1797,7 @@ export default function SapfBookingForm({
               const equipmentUnavailable =
                 Boolean(equipmentInfo) &&
                 (!equipmentInfo?.item.active || equipmentInfo.available <= 0);
-              const checked = selectedSupportValues.includes(value);
+              const checked = activeSelectedSupportValues.includes(value);
               const optionId = `support-${value
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, "-")}`;
@@ -2131,13 +2224,25 @@ export default function SapfBookingForm({
       </Card>
 
       <div className="sticky bottom-0 z-30 flex flex-col gap-3 rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-end">
-        <p className="text-xs text-muted-foreground sm:mr-auto">
-          {isSdsEditor
-            ? "Save updates carefully. Changes are reflected on the active request."
-            : submitReady
-              ? "Ready to submit. All required fields passed."
-              : "Complete all required fields marked with red asterisk before submitting."}
-        </p>
+        <div className="space-y-2 text-xs sm:mr-auto">
+          <p className="text-muted-foreground">
+            {isSdsEditor
+              ? "Save updates carefully. Changes are reflected on the active request."
+              : submitReady
+                ? "Ready to submit. All required fields passed."
+                : "Complete all required fields marked with red asterisk before submitting."}
+          </p>
+          {!isSdsEditor && !submitReady && missingSubmitItems.length > 0 ? (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive">
+              <p className="font-semibold">Missing before submit:</p>
+              <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                {missingSubmitItems.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
         {!isSdsEditor && (
           <Button
             type="submit"
