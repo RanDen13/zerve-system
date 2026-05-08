@@ -20,7 +20,7 @@ RUN apt-get update -y \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --no-frozen-lockfile --dangerously-allow-all-builds
 
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
