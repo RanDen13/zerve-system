@@ -279,17 +279,17 @@ export default function SapfBookingsPage() {
             className={`grid w-full ${
               tabItems.length === 2
                 ? "grid-cols-2 md:w-[320px]"
-                : "grid-cols-3 md:w-[420px]"
+                : "grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,0.85fr)] md:w-[520px]"
             }`}
           >
             {tabItems.map((item) => (
-              <TabsTrigger key={item.value} value={item.value}>
+              <TabsTrigger key={item.value} value={item.value} className="min-w-0 px-1.5 sm:px-2">
                 {item.icon}
-                {item.label}
+                <span className="min-w-0 truncate">{item.label}</span>
                 <StatusBadge
                   label={String(tabRequests[item.value]?.length ?? 0)}
                   tone={activeTab === item.value ? "default" : "muted"}
-                  className="ml-1 px-1.5 py-0 text-[10px]"
+                  className="ml-0.5 px-1.5 py-0 text-[10px]"
                 />
               </TabsTrigger>
             ))}

@@ -140,6 +140,31 @@ function amountInput(value: string) {
   return grouped;
 }
 
+function parseBudgetDetails(value?: string) {
+  const text = String(value || "");
+  const read = (label: string, nextLabels: string[]) => {
+    if (nextLabels.length === 0) {
+      return (
+        text.match(new RegExp(`${label}:\\s*([\\s\\S]*)$`, "i"))?.[1]?.trim() ||
+        ""
+      );
+    }
+
+    const nextPattern = nextLabels.map((item) => `${item}:`).join("|");
+    const pattern = new RegExp(
+      `${label}:\\s*([\\s\\S]*?)(?=\\s*(?:${nextPattern})|$)`,
+      "i",
+    );
+    return text.match(pattern)?.[1]?.trim() || "";
+  };
+
+  return {
+    amount: read("Requested amount", ["Purpose", "Breakdown"]),
+    purpose: read("Purpose", ["Breakdown"]),
+    breakdown: read("Breakdown", []),
+  };
+}
+
 function formatFileSize(bytes: number) {
   if (!bytes) return "0 MB";
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -389,6 +414,7 @@ export default function SapfBookingForm({
   const part1 = initialRequest?.sapfPart1 || {};
   const part2 = initialRequest?.sapfPart2 || {};
   const part3 = initialRequest?.sapfPart3 || "";
+  const parsedBudgetDetails = parseBudgetDetails(part2.budgetDetails);
   const initialProgram = initialProgramState(part1.program);
   const [selectedProgram, setSelectedProgram] = useState(initialProgram.option);
   const [otherProgram, setOtherProgram] = useState(initialProgram.other);
@@ -541,9 +567,28 @@ export default function SapfBookingForm({
     setNativeMissingFields(nativeMissingRequiredLabels(form));
   };
 
+  const updateNativeFormState = (form: HTMLFormElement) => {
+    setNativeFormReady(form.checkValidity());
+    setNativeMissingFields(nativeMissingRequiredLabels(form));
+  };
+
+  const scheduleFormValidityUpdate = () => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(updateFormValidity);
+    });
+  };
+
+  const formValidityKey = `${formKey}|${selectedPersonnelId}|${selectedProgram}`;
+
   useEffect(() => {
-    updateFormValidity();
-  }, [formKey]);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const form = formRef.current;
+        setNativeFormReady(form ? form.checkValidity() : false);
+        setNativeMissingFields(nativeMissingRequiredLabels(form));
+      });
+    });
+  }, [formValidityKey]);
 
   const activeVenues = venues.filter((venue) => venue.status === "ACTIVE");
   const selectedVenues = activeVenues.filter((venue) =>
@@ -587,6 +632,18 @@ export default function SapfBookingForm({
   const activeSelectedSupportValues = selectedSupportValues.filter((value) =>
     supportOptions.includes(value),
   );
+  const activeSelectedSupportKey = activeSelectedSupportValues.join("|");
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const form = formRef.current;
+        setNativeFormReady(form ? form.checkValidity() : false);
+        setNativeMissingFields(nativeMissingRequiredLabels(form));
+      });
+    });
+  }, [activeSelectedSupportKey]);
+
   const equipmentAvailabilityBySupport = useMemo(() => {
     const mapped = new Map<
       string,
@@ -1005,10 +1062,10 @@ export default function SapfBookingForm({
       key={formKey}
       onSubmit={handleSubmit}
       onInput={(event) => {
-        setNativeFormReady(event.currentTarget.checkValidity());
+        updateNativeFormState(event.currentTarget);
       }}
       onChange={(event) => {
-        setNativeFormReady(event.currentTarget.checkValidity());
+        updateNativeFormState(event.currentTarget);
       }}
       className="sapf-booking-form space-y-6"
     >
@@ -1508,7 +1565,7 @@ export default function SapfBookingForm({
               value={selectedPersonnelId}
               onValueChange={(value) => {
                 setSelectedPersonnelId(value);
-                setTimeout(updateFormValidity, 0);
+                scheduleFormValidityUpdate();
               }}
               required
             >
@@ -1854,7 +1911,10 @@ export default function SapfBookingForm({
                               name="budgetRequestedAmount"
                               inputMode="decimal"
                               placeholder="00,000.00"
-                              defaultValue={part2.budgetRequestedAmount || ""}
+                              defaultValue={
+                                part2.budgetRequestedAmount ||
+                                parsedBudgetDetails.amount
+                              }
                               onBlur={(event) => {
                                 event.currentTarget.value = amountInput(
                                   event.currentTarget.value,
@@ -1875,7 +1935,9 @@ export default function SapfBookingForm({
                               id="budgetPurpose"
                               name="budgetPurpose"
                               placeholder="Purpose of requested budget"
-                              defaultValue={part2.budgetPurpose || ""}
+                              defaultValue={
+                                part2.budgetPurpose || parsedBudgetDetails.purpose
+                              }
                               className="mt-2"
                               required
                             />
@@ -1891,7 +1953,12 @@ export default function SapfBookingForm({
                               id="budgetBreakdown"
                               name="budgetBreakdown"
                               placeholder="Items / breakdown"
-                              defaultValue={part2.budgetBreakdown || part2.budgetDetails || ""}
+                              defaultValue={
+                                part2.budgetBreakdown ||
+                                parsedBudgetDetails.breakdown ||
+                                part2.budgetDetails ||
+                                ""
+                              }
                               className="mt-2"
                               required
                             />

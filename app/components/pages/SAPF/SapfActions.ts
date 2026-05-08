@@ -483,8 +483,18 @@ async function nextRequestNumber(db: SapfDbClient = prisma) {
 function composeBudgetDetails(data: FormData) {
   const amount = field(data, "budgetRequestedAmount");
   const purpose = field(data, "budgetPurpose");
-  const breakdown = field(data, "budgetBreakdown");
+  let breakdown = field(data, "budgetBreakdown");
   const legacy = field(data, "budgetDetails");
+
+  const labeledBreakdown = breakdown.match(
+    /Breakdown:\s*([\s\S]*?)(?=\s*$)/i,
+  );
+  if (
+    labeledBreakdown &&
+    /Requested amount:|Purpose:|Breakdown:/i.test(breakdown)
+  ) {
+    breakdown = labeledBreakdown[1].trim();
+  }
 
   if (!amount && !purpose && !breakdown) return legacy;
 
