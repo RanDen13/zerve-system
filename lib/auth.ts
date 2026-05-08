@@ -11,7 +11,6 @@ import { prisma } from "./prisma";
 
 const appUrl = getAppUrl();
 const recaptchaSecretKey = process.env.RECAPTCHA_SECRET_KEY;
-const captchaEnabled = process.env.CAPTCHA_ENABLED !== "false";
 const captchaProtectedEndpoints = ["/sign-in/email", "/sign-in/social"];
 const magicCodeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const magicCodeLength = 10;
@@ -253,7 +252,7 @@ export const auth = betterAuth({
         max: 5,
       },
     }),
-    ...(captchaEnabled && recaptchaSecretKey
+    ...(recaptchaSecretKey
       ? [
           captcha({
             provider: "google-recaptcha",
