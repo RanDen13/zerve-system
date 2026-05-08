@@ -33,6 +33,11 @@ const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
 };
 
+function numberEnv(name: string, fallback: number) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 function getPrismaClient() {
   if (globalForPrisma.prisma) {
     return globalForPrisma.prisma;
@@ -49,6 +54,9 @@ function getPrismaClient() {
     globalForPrisma.prismaPool ||
     new Pool({
       connectionString: normalizePostgresSslMode(connectionString),
+      max: numberEnv("PG_POOL_MAX", process.env.VERCEL ? 1 : 10),
+      idleTimeoutMillis: numberEnv("PG_POOL_IDLE_TIMEOUT_MS", 10_000),
+      connectionTimeoutMillis: numberEnv("PG_POOL_CONNECTION_TIMEOUT_MS", 10_000),
     });
 
   const adapter = new PrismaPg(pool);
