@@ -204,6 +204,7 @@ export default function VenueMonthCalendar({
   compact = false,
   initialDate,
   initialView,
+  kiosk = false,
 }: {
   items: VenueCalendarItem[];
   title?: string;
@@ -211,6 +212,7 @@ export default function VenueMonthCalendar({
   compact?: boolean;
   initialDate?: Date | string;
   initialView?: CalendarView;
+  kiosk?: boolean;
 }) {
   const router = useRouter();
   const initialDay = startOfDay(
@@ -288,6 +290,14 @@ export default function VenueMonthCalendar({
     [weatherDays],
   );
   const selectedWeather = weatherByDate.get(weatherDateKey(selectedDay));
+  const quickJumpDays = useMemo(
+    () => [
+      { key: "today", label: "Today", date: startOfDay(sapfCalendarDate(new Date())) },
+      { key: "tomorrow", label: "Tomorrow", date: startOfDay(addDays(sapfCalendarDate(new Date()), 1)) },
+      { key: "week", label: "Start of week", date: startOfDay(startOfWeek(sapfCalendarDate(new Date()))) },
+    ],
+    [],
+  );
 
   const goPrevious = () => {
     if (calendarView === "day") {
@@ -337,9 +347,19 @@ export default function VenueMonthCalendar({
       transition={{ duration: 0.34, ease: "easeOut" }}
       className="overflow-hidden rounded-lg border bg-card/95 shadow-sm backdrop-blur"
     >
-      <div className="flex flex-col gap-4 border-b p-4 xl:flex-row xl:items-center xl:justify-between">
+      <div
+        className={`flex flex-col gap-4 border-b xl:flex-row xl:items-center xl:justify-between ${
+          kiosk ? "p-5 lg:p-6" : "p-4"
+        }`}
+      >
         <div className="flex min-w-0 items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-lg border bg-card shadow-xs">
+          <div
+            className={`shrink-0 rounded-lg border bg-card shadow-xs ${
+              kiosk
+                ? "flex h-16 w-16 flex-col items-center justify-center"
+                : "flex h-14 w-14 flex-col items-center justify-center"
+            }`}
+          >
             <span className="text-[11px] font-bold uppercase text-muted-foreground">
               {format(selectedDay, "MMM")}
             </span>
@@ -352,16 +372,16 @@ export default function VenueMonthCalendar({
               {title}
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-bold text-foreground">
+              <h3 className={`font-bold text-foreground ${kiosk ? "text-2xl" : "text-xl"}`}>
                 {calendarView === "month"
                   ? format(visibleMonth, "MMMM yyyy")
                   : format(selectedDay, "MMMM d, yyyy")}
               </h3>
-              <Badge variant="outline">
+              <Badge variant="outline" className={kiosk ? "text-sm" : ""}>
                 {calendarView === "month" ? "Month" : format(selectedDay, "EEEE")}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className={`${kiosk ? "text-base" : "text-sm"} text-muted-foreground`}>
               {calendarView === "month"
                 ? description
                 : `${selectedDayItems.length} item${
@@ -371,8 +391,24 @@ export default function VenueMonthCalendar({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {kiosk &&
+            quickJumpDays.map((quickDay) => (
+              <Button
+                key={quickDay.key}
+                type="button"
+                variant="outline"
+                className="h-11 px-4 text-sm font-semibold"
+                onClick={() => selectCalendarDay(quickDay.date)}
+              >
+                {quickDay.label}
+              </Button>
+            ))}
           {selectedWeather ? (
-            <div className="inline-flex h-9 items-center gap-2 rounded-md border bg-background px-3 text-sm shadow-xs">
+            <div
+              className={`inline-flex items-center gap-2 rounded-md border bg-background shadow-xs ${
+                kiosk ? "h-11 px-4 text-base" : "h-9 px-3 text-sm"
+              }`}
+            >
               <WeatherIcon
                 code={selectedWeather.weatherCode}
                 className="h-4 w-4 text-sky-600"
@@ -385,7 +421,11 @@ export default function VenueMonthCalendar({
               </span>
             </div>
           ) : weatherLoading ? (
-            <div className="inline-flex h-9 items-center rounded-md border bg-background px-3 text-sm text-muted-foreground shadow-xs">
+            <div
+              className={`inline-flex items-center rounded-md border bg-background text-muted-foreground shadow-xs ${
+                kiosk ? "h-11 px-4 text-base" : "h-9 px-3 text-sm"
+              }`}
+            >
               Loading weather...
             </div>
           ) : null}
@@ -394,7 +434,7 @@ export default function VenueMonthCalendar({
               type="button"
               variant="ghost"
               size="sm"
-              className="rounded-none border-r px-3"
+              className={`rounded-none border-r ${kiosk ? "h-11 px-4" : "px-3"}`}
               onClick={goPrevious}
               aria-label={
                 calendarView === "month" ? "Previous month" : "Previous day"
@@ -406,7 +446,7 @@ export default function VenueMonthCalendar({
               type="button"
               variant="ghost"
               size="sm"
-              className="rounded-none px-4"
+              className={`rounded-none ${kiosk ? "h-11 px-5 text-sm font-semibold" : "px-4"}`}
               onClick={goToday}
             >
               Today
@@ -415,7 +455,7 @@ export default function VenueMonthCalendar({
               type="button"
               variant="ghost"
               size="sm"
-              className="rounded-none border-l px-3"
+              className={`rounded-none border-l ${kiosk ? "h-11 px-4" : "px-3"}`}
               onClick={goNext}
               aria-label={calendarView === "month" ? "Next month" : "Next day"}
             >
@@ -426,7 +466,11 @@ export default function VenueMonthCalendar({
             value={calendarView}
             onValueChange={(value) => setCalendarView(value as CalendarView)}
           >
-            <SelectTrigger className="h-9 min-w-32 bg-background">
+            <SelectTrigger
+              className={`min-w-32 bg-background ${
+                kiosk ? "h-11 text-base" : "h-9"
+              }`}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -437,7 +481,11 @@ export default function VenueMonthCalendar({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b bg-muted/40 p-3">
+      <div
+        className={`flex flex-wrap gap-2 border-b bg-muted/40 ${
+          kiosk ? "p-4" : "p-3"
+        }`}
+      >
         {[
           { label: "Pending", className: "bg-amber-500" },
           { label: "Booked", className: "bg-emerald-500" },
@@ -448,13 +496,15 @@ export default function VenueMonthCalendar({
         ].map((item) => (
           <span
             key={item.label}
-            className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground"
+            className={`inline-flex items-center gap-2 font-medium text-muted-foreground ${
+              kiosk ? "text-sm" : "text-xs"
+            }`}
           >
             <span className={cn("h-2.5 w-2.5 rounded-full", item.className)} />
             {item.label}
           </span>
         ))}
-        <span className="ml-auto text-xs text-muted-foreground">
+        <span className={`ml-auto text-muted-foreground ${kiosk ? "text-sm" : "text-xs"}`}>
           {calendarView === "month"
             ? `${visibleMonthItems.length} item${
                 visibleMonthItems.length === 1 ? "" : "s"
@@ -476,6 +526,7 @@ export default function VenueMonthCalendar({
         >
         <MonthCalendar
           compact={compact}
+          kiosk={kiosk}
           monthItems={monthItems}
           selectedDay={selectedDay}
           visibleMonth={visibleMonth}
@@ -496,6 +547,7 @@ export default function VenueMonthCalendar({
         >
         <DayCalendar
           items={monthItems}
+          kiosk={kiosk}
           selectedDay={selectedDay}
           visibleMonth={visibleMonth}
           weatherByDate={weatherByDate}
@@ -512,6 +564,7 @@ export default function VenueMonthCalendar({
 
 function MonthCalendar({
   compact,
+  kiosk,
   monthItems,
   selectedDay,
   visibleMonth,
@@ -522,6 +575,7 @@ function MonthCalendar({
   onOpenItem,
 }: {
   compact: boolean;
+  kiosk: boolean;
   monthItems: NormalizedCalendarItem[];
   selectedDay: Date;
   visibleMonth: Date;
@@ -531,12 +585,16 @@ function MonthCalendar({
   onOpenDay: (day: Date) => void;
   onOpenItem: (item: NormalizedCalendarItem) => void;
 }) {
-  const maxLanes = compact ? 3 : 4;
-  const weekMinHeight = compact ? 128 : 164;
+  const maxLanes = compact ? 3 : kiosk ? 3 : 4;
+  const weekMinHeight = compact ? 128 : kiosk ? 196 : 164;
 
   return (
     <>
-      <div className="grid grid-cols-7 border-b bg-muted/40 text-center text-xs font-semibold text-muted-foreground">
+      <div
+        className={`grid grid-cols-7 border-b bg-muted/40 text-center font-semibold text-muted-foreground ${
+          kiosk ? "text-sm" : "text-xs"
+        }`}
+      >
         {WEEKDAYS.map((day) => (
           <div key={day} className="border-r py-2 last:border-r-0">
             {day}
@@ -599,20 +657,24 @@ function MonthCalendar({
                     key={day.toISOString()}
                     type="button"
                     className={cn(
-                      "min-h-full border-r bg-card p-2 text-left align-top last:border-r-0 hover:bg-muted/50",
+                      `min-h-full border-r bg-card text-left align-top last:border-r-0 hover:bg-muted/50 ${
+                        kiosk ? "p-3" : "p-2"
+                      }`,
                       !isSameMonth(day, visibleMonth) &&
                         "bg-muted/25 text-muted-foreground/70",
                       isToday(day) && "bg-blue-500/10",
                       isSameDay(day, selectedDay) &&
                         "ring-2 ring-inset ring-violet-500/50",
                     )}
-                    onClick={() => onSelectDay(day)}
+                    onClick={() => (kiosk ? onOpenDay(day) : onSelectDay(day))}
                     onDoubleClick={() => onOpenDay(day)}
                   >
                     <div className="flex items-start justify-between gap-1">
                       <span
                         className={cn(
-                          "flex h-6 min-w-6 w-fit items-center justify-center rounded-full px-1.5 text-xs font-semibold",
+                          `flex min-w-6 w-fit items-center justify-center rounded-full px-1.5 font-semibold ${
+                            kiosk ? "h-8 text-sm" : "h-6 text-xs"
+                          }`,
                           isToday(day) && "bg-violet-600 text-white",
                         )}
                       >
@@ -638,7 +700,11 @@ function MonthCalendar({
                     key={`${item.id}-${weekStart.toISOString()}`}
                     type="button"
                     className={cn(
-                      "pointer-events-auto mx-1 h-7 truncate rounded-md border px-2 text-left text-[11px] font-semibold leading-6 shadow-xs",
+                      `pointer-events-auto mx-1 truncate rounded-md border text-left font-semibold shadow-xs ${
+                        kiosk
+                          ? "h-9 px-3 text-xs leading-8"
+                          : "h-7 px-2 text-[11px] leading-6"
+                      }`,
                       statusClass(item),
                     )}
                     style={{
@@ -658,7 +724,9 @@ function MonthCalendar({
                 ))}
                 {hiddenCount > 0 && (
                   <span
-                    className="pointer-events-auto col-span-7 px-3 text-right text-[11px] font-semibold text-muted-foreground"
+                    className={`pointer-events-auto col-span-7 px-3 text-right font-semibold text-muted-foreground ${
+                      kiosk ? "text-sm" : "text-[11px]"
+                    }`}
                     style={{ gridRow: maxLanes + 1 }}
                   >
                     {hiddenCount} more...
@@ -675,6 +743,7 @@ function MonthCalendar({
 
 function DayCalendar({
   items,
+  kiosk,
   selectedDay,
   visibleMonth,
   weatherByDate,
@@ -682,6 +751,7 @@ function DayCalendar({
   onOpenItem,
 }: {
   items: NormalizedCalendarItem[];
+  kiosk: boolean;
   selectedDay: Date;
   visibleMonth: Date;
   weatherByDate: Map<string, CalendarWeatherDay>;
@@ -746,14 +816,22 @@ function DayCalendar({
 
   return (
     <div className="grid min-h-[620px] lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="max-h-[720px] overflow-auto border-b lg:border-b-0 lg:border-r">
+      <div
+        className={`overflow-auto border-b lg:border-b-0 lg:border-r ${
+          kiosk ? "max-h-[820px]" : "max-h-[720px]"
+        }`}
+      >
         <div
           className="relative grid grid-cols-[72px_minmax(0,1fr)]"
           style={{ height: timelineHeight }}
         >
           {hours.map((hour) => (
             <div key={hour} className="contents">
-              <div className="border-r border-b bg-muted/20 pr-2 pt-2 text-right text-xs text-muted-foreground">
+              <div
+                className={`border-r border-b bg-muted/20 pr-2 pt-2 text-right text-muted-foreground ${
+                  kiosk ? "text-sm" : "text-xs"
+                }`}
+              >
                 {format(new Date(2026, 0, 1, hour), "h a")}
               </div>
               <div className="border-b bg-card" />
@@ -779,7 +857,9 @@ function DayCalendar({
                   type="button"
                   key={item.id}
                   className={cn(
-                    "absolute left-3 right-3 overflow-hidden rounded-md border p-2 text-left text-xs shadow-xs",
+                    `absolute left-3 right-3 overflow-hidden rounded-md border text-left shadow-xs ${
+                      kiosk ? "p-3 text-sm" : "p-2 text-xs"
+                    }`,
                     statusClass(item),
                   )}
                   style={{
@@ -808,13 +888,13 @@ function DayCalendar({
       </div>
 
       <aside className="bg-card">
-        <div className="border-b p-5">
+        <div className={`border-b ${kiosk ? "p-6" : "p-5"}`}>
           <div className="mb-5 flex items-center justify-between">
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
             <p className="font-semibold">{format(visibleMonth, "MMMM yyyy")}</p>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="grid grid-cols-7 gap-y-3 text-center text-sm">
+          <div className={`grid grid-cols-7 gap-y-3 text-center ${kiosk ? "text-base" : "text-sm"}`}>
             {WEEKDAYS.map((day) => (
               <div key={day} className="font-semibold text-muted-foreground">
                 {day.slice(0, 2)}
@@ -827,7 +907,9 @@ function DayCalendar({
                   key={day.toISOString()}
                   type="button"
                   className={cn(
-                    "mx-auto flex h-9 w-9 flex-col items-center justify-center rounded-full text-sm hover:bg-muted",
+                    `mx-auto flex flex-col items-center justify-center rounded-full hover:bg-muted ${
+                      kiosk ? "h-11 w-11 text-base" : "h-9 w-9 text-sm"
+                    }`,
                     !isSameMonth(day, visibleMonth) && "text-muted-foreground/50",
                     isSameDay(day, selectedDay) && "bg-violet-600 text-white hover:bg-violet-700",
                   )}
@@ -848,8 +930,8 @@ function DayCalendar({
           </div>
         </div>
 
-        <div className="max-h-[360px] space-y-3 overflow-auto p-5">
-          <h4 className="font-semibold text-foreground">
+        <div className={`space-y-3 overflow-auto ${kiosk ? "max-h-[420px] p-6" : "max-h-[360px] p-5"}`}>
+          <h4 className={`font-semibold text-foreground ${kiosk ? "text-lg" : ""}`}>
             {format(selectedDay, "EEEE, MMM d")}
           </h4>
           {selectedWeather && (
@@ -897,7 +979,9 @@ function DayCalendar({
                 type="button"
                 key={item.id}
                 className={cn(
-                  "w-full rounded-md border p-3 text-left text-sm",
+                  `w-full rounded-md border text-left ${
+                    kiosk ? "p-4 text-base" : "p-3 text-sm"
+                  }`,
                   statusClass(item),
                 )}
                 onClick={() => onOpenItem(item)}

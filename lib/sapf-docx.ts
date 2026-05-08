@@ -461,7 +461,10 @@ export async function renderSapfDocx({ request }: { request: any }) {
       includes(part2.supportRequests, "LCD Projector"),
     ),
     supportLCdProjectorCount: textField(part2.lcdProjectorQty),
-    supportLongTable: marker(includes(part2.supportRequests, "One Long Table")),
+    supportLongTable: marker(
+      includes(part2.supportRequests, "Tables") ||
+        includes(part2.supportRequests, "One Long Table"),
+    ),
     supportTableCount: textField(part2.longTableQty),
     supportChairs: marker(includes(part2.supportRequests, "Chairs")),
     supportChairsCount: textField(part2.chairsQty),

@@ -53,6 +53,7 @@ import {
 } from "./sapfData";
 import {
   equipmentFieldForSupportLabel,
+  normalizeSupportRequestLabel,
   parseEquipmentQuantity,
 } from "./sapfEquipment";
 import {
@@ -129,6 +130,12 @@ function formatFileSize(bytes: number) {
 
 function userNameWithTitle(user: any) {
   return user.title ? `${user.name}, ${user.title}` : user.name;
+}
+
+function isFinanceSignatoryUser(user: any) {
+  return [user?.name, user?.email, user?.title]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes("finance"));
 }
 
 function createSubmissionKey() {
@@ -312,7 +319,9 @@ export default function SapfBookingForm({
     Array.isArray(part1.graduateAttributes) ? part1.graduateAttributes : [],
   );
   const selectedSupportRequests = new Set<string>(
-    Array.isArray(part2.supportRequests) ? part2.supportRequests : [],
+    Array.isArray(part2.supportRequests)
+      ? part2.supportRequests.map(normalizeSupportRequestLabel)
+      : [],
   );
   const [selectedSupportValues, setSelectedSupportValues] = useState<string[]>(
     Array.from(selectedSupportRequests),
@@ -371,7 +380,7 @@ export default function SapfBookingForm({
       placeholder: "Enter number of LCD projectors needed.",
       defaultValue: part2.lcdProjectorQty || "",
     },
-    "One Long Table": {
+    Tables: {
       name: "longTableQty",
       label: "Table Quantity",
       placeholder: "Enter number of tables needed.",
@@ -389,6 +398,25 @@ export default function SapfBookingForm({
       checked
         ? [...new Set([...current, value])]
         : current.filter((item) => item !== value),
+    );
+
+    if (lockApprovalChain || value !== "Budget") return;
+
+    if (checked) {
+      const financeIds = financeSignatoryOptions.map((user) => user.id);
+      if (financeIds.length > 0) {
+        setSelectedAdditionalSignatoryIds((current) => [
+          ...new Set([...current, ...financeIds]),
+        ]);
+      }
+      return;
+    }
+
+    setSelectedAdditionalSignatoryIds((current) =>
+      current.filter((userId) => {
+        const user = additionalSignatoryOptions.find((item) => item.id === userId);
+        return user ? !isFinanceSignatoryUser(user) : true;
+      }),
     );
   };
   const initialAdviserId =
@@ -415,20 +443,26 @@ export default function SapfBookingForm({
   const equipmentBySupport = useMemo(() => {
     const mapped = new Map<string, EquipmentCatalogItem>();
     equipmentItems.forEach((item) => {
-      if (item.supportLabel) mapped.set(item.supportLabel, item);
+      if (item.supportLabel) {
+        mapped.set(normalizeSupportRequestLabel(item.supportLabel), item);
+      }
     });
     return mapped;
   }, [equipmentItems]);
   const supportOptions = useMemo(
-    () => [
-      ...SUPPORT_REQUEST_OPTIONS,
-      ...equipmentItems
-        .map((item) => item.supportLabel)
-        .filter(
-          (label): label is string =>
-            Boolean(label) && !SUPPORT_REQUEST_OPTIONS.includes(label as any),
-        ),
-    ],
+    () =>
+      Array.from(
+        new Set([
+          ...SUPPORT_REQUEST_OPTIONS,
+          ...equipmentItems
+            .map((item) => item.supportLabel)
+            .filter(Boolean)
+            .map((label) => normalizeSupportRequestLabel(String(label)))
+            .filter(
+              (label) => !SUPPORT_REQUEST_OPTIONS.includes(label as any),
+            ),
+        ]),
+      ),
     [equipmentItems],
   );
   const equipmentAvailabilityBySupport = useMemo(() => {
@@ -489,11 +523,27 @@ export default function SapfBookingForm({
       : "immediately";
   const adviserOptions = approvers.ADVISER || [];
   const additionalSignatoryOptions = approvers.ADDITIONAL_SIGNATORY || [];
+  const budgetSupportSelected = selectedSupportValues.includes("Budget");
+  const financeSignatoryOptions = additionalSignatoryOptions.filter(
+    isFinanceSignatoryUser,
+  );
+  const regularAdditionalSignatoryOptions = additionalSignatoryOptions.filter(
+    (user) => !isFinanceSignatoryUser(user),
+  );
+  const availableAdditionalSignatoryOptions = budgetSupportSelected
+    ? additionalSignatoryOptions
+    : regularAdditionalSignatoryOptions;
+  const effectiveSelectedAdditionalSignatoryIds = selectedAdditionalSignatoryIds.filter(
+    (userId) => {
+      const user = additionalSignatoryOptions.find((item) => item.id === userId);
+      return budgetSupportSelected || (user ? !isFinanceSignatoryUser(user) : true);
+    },
+  );
   const selectedAdviser = adviserOptions.find(
     (user) => user.id === selectedAdviserId,
   );
   const selectedAdditionalSignatories = additionalSignatoryOptions.filter(
-    (user) => selectedAdditionalSignatoryIds.includes(user.id),
+    (user) => effectiveSelectedAdditionalSignatoryIds.includes(user.id),
   );
   const userMatchesSearch = (user: any, search: string) => {
     if (!search) return true;
@@ -505,7 +555,7 @@ export default function SapfBookingForm({
   const filteredAdvisers = adviserOptions.filter((user) =>
     userMatchesSearch(user, adviserSearch),
   );
-  const filteredAdditionalSignatories = additionalSignatoryOptions.filter(
+  const filteredAdditionalSignatories = availableAdditionalSignatoryOptions.filter(
     (user) => userMatchesSearch(user, signatorySearch),
   );
   const adviserSummary = selectedAdviser
@@ -775,7 +825,7 @@ export default function SapfBookingForm({
       {selectedAdviserId && (
         <input type="hidden" name="adviserId" value={selectedAdviserId} />
       )}
-      {selectedAdditionalSignatoryIds.map((userId) => (
+      {effectiveSelectedAdditionalSignatoryIds.map((userId) => (
         <input
           key={userId}
           type="hidden"
@@ -788,11 +838,11 @@ export default function SapfBookingForm({
         <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-foreground">
-              Reservation sections
+              Reservation builder
             </p>
             <p className="text-xs text-muted-foreground">
-              Jump through the long SAPF form. Required fields are checked when
-              you save or submit.
+              Move section by section. Draft keeps work safe. Submit sends this
+              into approval flow.
             </p>
           </div>
           <p className="text-xs font-medium text-primary">
@@ -824,6 +874,44 @@ export default function SapfBookingForm({
             </a>
           ))}
         </nav>
+        <div className="mt-3 grid gap-2 md:grid-cols-3">
+          <div className="rounded-md border bg-background px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Request state
+            </p>
+            <p className="mt-1 text-sm font-medium text-foreground">
+              {isSdsEditor
+                ? "SDS editing active booking"
+                : isEditing
+                  ? "Officer revising existing request"
+                  : "Officer preparing new request"}
+            </p>
+          </div>
+          <div className="rounded-md border bg-background px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Submission readiness
+            </p>
+            <p className="mt-1 text-sm font-medium text-foreground">
+              {selectedVenueIds.length} venue
+              {selectedVenueIds.length === 1 ? "" : "s"}.
+              {" "}
+              {scheduleRows.length} day{scheduleRows.length === 1 ? "" : "s"}.
+              {" "}
+              {selectedSupportValues.length} support item
+              {selectedSupportValues.length === 1 ? "" : "s"}.
+            </p>
+          </div>
+          <div className="rounded-md border bg-background px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Next workflow move
+            </p>
+            <p className="mt-1 text-sm font-medium text-foreground">
+              {isSdsEditor
+                ? "Save changes. Officer, passed reviewers get update."
+                : "Adviser reviews first after submit."}
+            </p>
+          </div>
+        </div>
       </div>
 
       <Card id="form-venues" className="scroll-mt-40">
@@ -1385,6 +1473,10 @@ export default function SapfBookingForm({
       <Card id="form-support" className="scroll-mt-40">
         <CardHeader>
           <CardTitle>Part 2: School Support</CardTitle>
+          <CardDescription>
+            Select only support actually needed. Budget request unlocks VP
+            Finance signatory in approval chain.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
@@ -1498,6 +1590,24 @@ export default function SapfBookingForm({
               className="mt-2"
             />
           </div>
+          <div
+            className={`md:col-span-2 rounded-lg border p-3 text-sm ${
+              budgetSupportSelected
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100"
+                : "border-border bg-muted/40 text-muted-foreground"
+            }`}
+          >
+            <p className="font-semibold">
+              {budgetSupportSelected
+                ? "Budget selected"
+                : "Budget not selected"}
+            </p>
+            <p className="mt-1">
+              {budgetSupportSelected
+                ? "VP Finance can now be added under additional signatories if finance review is needed."
+                : "VP Finance stays hidden from additional signatories until budget support is requested."}
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -1519,7 +1629,8 @@ export default function SapfBookingForm({
         <CardHeader>
           <CardTitle>Approval Chain</CardTitle>
           <CardDescription>
-            Select the adviser and any optional additional signatories.
+            Select adviser first. Optional signatories stay flexible. VP
+            Finance appears only when budget support is requested.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1618,6 +1729,15 @@ export default function SapfBookingForm({
           {additionalSignatoryOptions.length > 0 && (
             <div>
               <Label>Additional Signatories</Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Always optional. Finance-specific signatory only appears when
+                Part 2 includes Budget.
+              </p>
+              {budgetSupportSelected && financeSignatoryOptions.length > 0 && (
+                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+                  VP Finance auto-recommended. You can uncheck anytime.
+                </p>
+              )}
               <Popover
                 open={signatoryPopoverOpen}
                 onOpenChange={setSignatoryPopoverOpen}
@@ -1696,6 +1816,12 @@ export default function SapfBookingForm({
                   </div>
                 </PopoverContent>
               </Popover>
+
+              {!budgetSupportSelected && financeSignatoryOptions.length > 0 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Add Budget under Part 2 if you need VP Finance in this chain.
+                </p>
+              )}
 
               {selectedAdditionalSignatories.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">

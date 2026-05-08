@@ -51,6 +51,7 @@ import {
 } from "./sapfEquipment";
 import { formatSapfDate, formatSapfTime } from "./sapfSchedule";
 import SapfPageLoading from "./SapfPageLoading";
+import Link from "next/link";
 
 type QueueBucket =
   | "all"
@@ -339,10 +340,6 @@ export default function EquipmentProvisioningPage() {
     () => groupByRequest(workspace?.requests || []),
     [workspace],
   );
-  const selectedGroup =
-    groupedRequests.find((group) => group.request.id === selectedId) ||
-    groupedRequests[0];
-
   const allocations = useMemo(
     () => requestedQuantityByItem(workspace?.requests || []),
     [workspace],
@@ -357,6 +354,15 @@ export default function EquipmentProvisioningPage() {
     const bucket = groupBucket(group);
     return (tab === "all" || bucket === tab) && requestMatches(group, query);
   });
+  const activeSelectedId = filteredGroups.some(
+    (group) => group.request.id === selectedId,
+  )
+    ? selectedId
+    : (filteredGroups[0]?.request.id ?? "");
+  const selectedGroup =
+    filteredGroups.find((group) => group.request.id === activeSelectedId) ||
+    filteredGroups[0] ||
+    null;
 
   const stats = {
     incoming: groupedRequests.filter((group) => groupBucket(group) === "incoming").length,
@@ -501,7 +507,14 @@ export default function EquipmentProvisioningPage() {
                   variant={tab === item.id ? "default" : "outline"}
                   onClick={() => setTab(item.id)}
                 >
-                  {item.label}
+                  {item.label}{" "}
+                  <span className="text-xs text-muted-foreground/80">
+                    (
+                    {item.id === "all"
+                      ? groupedRequests.length
+                      : groupedRequests.filter((group) => groupBucket(group) === item.id).length}
+                    )
+                  </span>
                 </Button>
               ))}
             </div>
@@ -594,7 +607,7 @@ export default function EquipmentProvisioningPage() {
                             ) : (
                               <PackageCheck className="mr-2 h-4 w-4" />
                             )}
-                            Mark Provided
+                            {canProvide ? "Mark Provided" : "Waiting approval"}
                           </Button>
                         )}
                         {hasReturnRequested && (
@@ -688,7 +701,16 @@ export default function EquipmentProvisioningPage() {
                       <span className="font-semibold">Submitted:</span>{" "}
                       {format(new Date(selectedGroup.request.createdAt), "MMM d, yyyy h:mm a")}
                     </p>
+                    <p>
+                      <span className="font-semibold">Queue status:</span>{" "}
+                      {queueTabs.find((item) => item.id === groupBucket(selectedGroup))?.label}
+                    </p>
                   </div>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href={`/user/bookings/${selectedGroup.request.id}`}>
+                      Open booking record
+                    </Link>
+                  </Button>
                   <div className="space-y-2">
                     <p className="font-semibold">Timeline</p>
                     {selectedGroup.rows.map((row) => (

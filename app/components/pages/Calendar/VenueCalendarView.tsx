@@ -248,20 +248,43 @@ export default function VenueCalendarView({
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8">
-      <div className="rounded-lg border border-white/15 bg-white/10 p-5 text-white shadow-2xl backdrop-blur-md lg:p-7">
+    <div
+      className={`mx-auto space-y-8 ${kiosk ? "max-w-[96rem]" : "max-w-7xl"}`}
+    >
+      <div
+        className={`rounded-lg border border-white/15 bg-white/10 text-white shadow-2xl backdrop-blur-md ${
+          kiosk ? "p-6 lg:p-8" : "p-5 lg:p-7"
+        }`}
+      >
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
-            <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-normal text-emerald-200">
+            <p
+              className={`mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 font-semibold uppercase tracking-normal text-emerald-200 ${
+                kiosk ? "text-sm" : "text-xs"
+              }`}
+            >
               <CalendarDays className="h-3.5 w-3.5" />
               Zerve Calendar
             </p>
-            <h1 className="text-3xl font-bold tracking-normal md:text-4xl">
+            <h1
+              className={`font-bold tracking-normal ${
+                kiosk ? "text-4xl md:text-5xl" : "text-3xl md:text-4xl"
+              }`}
+            >
               {title}
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75 md:text-base">
+            <p
+              className={`mt-2 max-w-2xl leading-6 text-white/75 ${
+                kiosk ? "text-base md:text-lg" : "text-sm md:text-base"
+              }`}
+            >
               {description}
             </p>
+            {kiosk && (
+              <p className="mt-3 text-sm text-emerald-100/85 md:text-base">
+                Tap colored cards below, then tap item to open exact date.
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {!kiosk && backHref && (
@@ -285,19 +308,27 @@ export default function VenueCalendarView({
                 <Link href={actionHref}>{actionLabel}</Link>
               </Button>
             )}
-            <div className="text-foreground">
-              <ModeToggle />
-            </div>
+            {!kiosk && (
+              <div className="text-foreground">
+                <ModeToggle />
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div
+          className={`mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 ${
+            kiosk ? "2xl:gap-4" : ""
+          }`}
+        >
           {legendPanels.map((panel) => (
             <button
               key={panel.key}
               type="button"
               onClick={() => openLegendPanel(panel.key)}
-              className={`rounded-md border p-3 text-left text-white transition hover:bg-white/15 ${
+              className={`rounded-md border text-left text-white transition hover:bg-white/15 ${
+                kiosk ? "min-h-[7.5rem] p-4 md:p-5" : "p-3"
+              } ${
                 panel.cardClassName
               } ${
                 activeLegendPanel === panel.key
@@ -309,45 +340,55 @@ export default function VenueCalendarView({
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-full ${panel.dotClassName}`}
                 />
-                <p className="min-w-0 text-xs font-semibold uppercase tracking-normal text-white/75">
+                <p
+                  className={`min-w-0 font-semibold uppercase tracking-normal text-white/75 ${
+                    kiosk ? "text-sm" : "text-xs"
+                  }`}
+                >
                   {panel.label}
                 </p>
               </div>
-              <p className="mt-2 text-2xl font-bold">
+              <p className={`mt-2 font-bold ${kiosk ? "text-3xl" : "text-2xl"}`}>
                 {legendLists[panel.key].length}
               </p>
             </button>
           ))}
         </div>
 
-        <div className="mt-3 rounded-md border border-white/15 bg-white/10 p-3">
+        <div
+          className={`mt-3 rounded-md border border-white/15 bg-white/10 ${
+            kiosk ? "p-4" : "p-3"
+          }`}
+        >
           <div className="mb-2 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <span
                 className={`h-2.5 w-2.5 shrink-0 rounded-full ${selectedLegendPanel.dotClassName}`}
               />
-              <p className="truncate text-sm font-semibold">
+              <p className={`truncate font-semibold ${kiosk ? "text-base" : "text-sm"}`}>
                 {selectedLegendPanel.label}
               </p>
             </div>
-            <p className="shrink-0 text-xs text-white/65">
+            <p className={`shrink-0 text-white/65 ${kiosk ? "text-sm" : "text-xs"}`}>
               {selectedLegendItems.length} date
               {selectedLegendItems.length === 1 ? "" : "s"}
             </p>
           </div>
-          <div className="max-h-56 overflow-y-auto pr-1">
+          <div className={`${kiosk ? "max-h-72" : "max-h-56"} overflow-y-auto pr-1`}>
             {selectedLegendItems.length > 0 ? (
               <div className="grid gap-2 md:grid-cols-2">
                 {selectedLegendItems.map((item) => (
                   <Link
                     key={item.id}
                     href={item.href}
-                    className="rounded-md border border-white/15 bg-black/15 p-3 text-sm transition hover:bg-white/15"
+                    className={`rounded-md border border-white/15 bg-black/15 transition hover:bg-white/15 ${
+                      kiosk ? "p-4 text-base" : "p-3 text-sm"
+                    }`}
                   >
                     <span className="block truncate font-semibold">
                       {item.title}
                     </span>
-                    <span className="block text-xs text-white/70">
+                    <span className={`block text-white/70 ${kiosk ? "text-sm" : "text-xs"}`}>
                       {item.venueName} - {item.date} - {item.time}
                     </span>
                   </Link>
@@ -363,7 +404,11 @@ export default function VenueCalendarView({
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 md:w-[320px]">
+        <TabsList
+          className={`grid w-full grid-cols-2 ${
+            kiosk ? "h-12 text-base md:w-[420px]" : "md:w-[320px]"
+          }`}
+        >
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="venues">Venues</TabsTrigger>
         </TabsList>
@@ -375,6 +420,7 @@ export default function VenueCalendarView({
             title="All Venue Events"
             description="Reservations and blocks across every venue."
             initialDate={initialDate}
+            kiosk={kiosk}
           />
         </TabsContent>
 

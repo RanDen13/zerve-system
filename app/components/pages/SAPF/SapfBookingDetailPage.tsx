@@ -5,6 +5,7 @@ import {
   ErrorStateCard,
   PageHeader,
   PageShell,
+  StatusBadge,
 } from "@/app/components/UX";
 import ModalBase from "@/app/components/Popup/ModalBase";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
@@ -51,6 +52,14 @@ import {
 
 function ButtonSpinner() {
   return <Loader2 className="mr-2 h-4 w-4 animate-spin" />;
+}
+
+function currentWorkflowStep(request: any) {
+  return (
+    request.approvalSteps?.find((step: any) => step.status === "ACTIVE") ||
+    request.approvalSteps?.find((step: any) => step.status === "RETURNED") ||
+    null
+  );
 }
 
 export default function SapfBookingDetailPage({
@@ -148,6 +157,20 @@ export default function SapfBookingDetailPage({
     me?.role === "OFFICER" &&
     request.status === "APPROVED" &&
     request.equipmentRequests?.some((item: any) => item.status === "PROVIDED");
+  const activeStep = currentWorkflowStep(request);
+  const officerActionSummary = canEdit
+    ? "You can still edit directly."
+    : canRequestEdit
+      ? "Direct editing locked. Send edit request to SDS."
+      : request.status === "RETURNED_FOR_REVISION"
+        ? "Revise request, then resubmit."
+        : request.status === "APPROVED"
+          ? "Request approved. Monitor event completion or equipment return."
+          : request.status === "REJECTED"
+            ? "Request closed after rejection."
+            : request.status === "CANCELLED"
+              ? "Request closed after cancellation."
+              : "Track progress and wait for current reviewer.";
 
   const handleCancel = async () => {
     if (cancelling) return;
@@ -340,6 +363,44 @@ export default function SapfBookingDetailPage({
           {pendingChangeRequest.reason}
         </Callout>
       )}
+
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5" />
+            Workflow Status
+          </CardTitle>
+          <CardDescription>
+            Officer-side summary of current request state.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Current status
+            </p>
+            <div className="mt-2">
+              <StatusBadge status={request.status} />
+            </div>
+          </div>
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Current owner
+            </p>
+            <p className="mt-2 text-sm font-medium text-foreground">
+              {activeStep?.reviewer?.name || activeStep?.label || "No active reviewer"}
+            </p>
+          </div>
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              What you can do now
+            </p>
+            <p className="mt-2 text-sm font-medium text-foreground">
+              {officerActionSummary}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="details" className="space-y-4">
         <TabsList

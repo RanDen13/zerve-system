@@ -139,9 +139,11 @@ const page = async ({
               <Link href="/">Home</Link>
             </Button>
           )}
-          <div className="text-foreground">
-            <ModeToggle />
-          </div>
+          {!isKiosk && (
+            <div className="text-foreground">
+              <ModeToggle />
+            </div>
+          )}
         </div>
 
         <VenueImageCarousel
@@ -182,6 +184,7 @@ const page = async ({
           title={`${venue.name} calendar`}
           description="Pending requests are soft holds; booked reservations and blocks reserve dates."
           initialDate={date}
+          kiosk={isKiosk}
         />
       </div>
     </main>

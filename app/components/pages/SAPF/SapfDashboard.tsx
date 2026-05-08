@@ -91,8 +91,12 @@ export default function SapfDashboard() {
       conversations: requests.reduce(
         (sum: number, request: any) =>
           sum +
-          request.approvalSteps.filter((step: any) => step.concernThread)
-            .length,
+          request.approvalSteps.filter(
+            (step: any) =>
+              step.concernThread &&
+              step.concernThread.status !== "RESOLVED" &&
+              ["ACTIVE", "RETURNED"].includes(step.status),
+          ).length,
         0,
       ),
     };
@@ -142,34 +146,37 @@ export default function SapfDashboard() {
     workspace.me.role === "OFFICER"
       ? `/user/bookings/${requestId}`
       : `/user/approvals/${requestId}`;
+  const isOfficer = workspace.me.role === "OFFICER";
   const quickActions = [
-    ...(workspace.me.role === "OFFICER"
+    ...(isOfficer
       ? [
           {
             href: "/user/bookings/create",
-            title: "Create a booking",
-            description: "Start a venue reservation and save drafts before submitting.",
+            title: "Start new request",
+            description: "Build reservation, save draft, then submit into approval flow.",
             icon: <CirclePlus className="h-5 w-5" />,
           },
           {
             href: "/user/spaces",
-            title: "Browse venues",
-            description: "Compare venue capacity, availability, and booking rules.",
+            title: "Check venues",
+            description: "Compare venue capacity, availability, and booking lead times.",
             icon: <Building2 className="h-5 w-5" />,
           },
         ]
       : [
           {
             href: "/user/approvals",
-            title: "Review approvals",
-            description: "Open requests that need your decision or follow-up.",
+            title: "Open review queue",
+            description: "See requests waiting for your action now.",
             icon: <ShieldCheck className="h-5 w-5" />,
           },
         ]),
     {
       href: "/user/bookings",
-      title: "View booking records",
-      description: "Search pending, followed, and history records.",
+      title: isOfficer ? "Track my requests" : "Track linked requests",
+      description: isOfficer
+        ? "See drafts, active requests, and closed records."
+        : "See active queue, followed requests, and closed records.",
       icon: <History className="h-5 w-5" />,
     },
   ];
@@ -178,7 +185,7 @@ export default function SapfDashboard() {
     <PageShell>
       <MotionSection>
         <PageHeader
-          title="Zerve Workspace"
+          title={isOfficer ? "Officer Workspace" : "Approval Workspace"}
           description={
             <>
             Signed in as {workspace.me.name} -{" "}
@@ -198,12 +205,19 @@ export default function SapfDashboard() {
         />
       </MotionSection>
 
-      <MotionList className="dashboard-grid" data-tour="dashboard-summary">
+      <MotionList
+        className="dashboard-grid gap-4 md:gap-5"
+        data-tour="dashboard-summary"
+      >
         <MotionItem>
           <StatCard
-            label="Current"
+            label={isOfficer ? "Active Requests" : "Active Reviews"}
             value={stats.current}
-            description="Active requests in progress"
+            description={
+              isOfficer
+                ? "Drafts, submitted, and revision items still moving"
+                : "Requests still moving through workflow near you"
+            }
             href="/user/bookings"
             actionLabel="Open"
             icon={<Clock className="h-5 w-5" />}
@@ -212,9 +226,9 @@ export default function SapfDashboard() {
         </MotionItem>
         <MotionItem>
           <StatCard
-            label="History"
+            label="Closed"
             value={stats.history}
-            description="Completed, rejected, and cancelled"
+            description="Approved, rejected, and cancelled records"
             href="/user/bookings"
             actionLabel="View"
             icon={<History className="h-5 w-5" />}
@@ -225,7 +239,11 @@ export default function SapfDashboard() {
           <StatCard
             label="Approved"
             value={stats.approved}
-            description="Reservations ready or completed"
+            description={
+              isOfficer
+                ? "Reservations already cleared"
+                : "Reservations completed in workflow"
+            }
             href="/user/bookings"
             actionLabel="Review"
             icon={<CheckCircle className="h-5 w-5" />}
@@ -234,9 +252,9 @@ export default function SapfDashboard() {
         </MotionItem>
         <MotionItem>
           <StatCard
-            label="Private threads"
+            label="Concern Threads"
             value={stats.conversations}
-            description="Concern threads that may need replies"
+            description="Private concern threads that may need replies"
             href="/user/bookings"
             actionLabel="Check"
             icon={<MessageSquare className="h-5 w-5" />}
@@ -245,7 +263,7 @@ export default function SapfDashboard() {
         </MotionItem>
       </MotionList>
 
-      <MotionList className="grid gap-4 md:grid-cols-3">
+      <MotionList className="grid gap-4 md:grid-cols-3 md:gap-5">
         {quickActions.map((action) => (
           <MotionItem key={action.href}>
             <StatCard
@@ -260,7 +278,36 @@ export default function SapfDashboard() {
         ))}
       </MotionList>
 
-      <MotionList className="grid gap-4 md:grid-cols-2">
+      <MotionList className="grid gap-4 md:grid-cols-2 md:gap-5">
+        <MotionItem>
+        <Card className="panel-hover">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              {isOfficer ? "What to do next" : "Review focus"}
+            </CardTitle>
+            <CardDescription>
+              {isOfficer
+                ? "Best next move for officer-side workflow."
+                : "Best next move for reviewer-side workflow."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            {isOfficer ? (
+              <>
+                <p>1 pending item usually means draft, active review, or revision request.</p>
+                <p>Open active request detail to see exact stage, current reviewer, and allowed actions.</p>
+              </>
+            ) : (
+              <>
+                <p>Pending approvals count shows requests waiting for your direct action.</p>
+                <p>Following requests stay visible even when another reviewer owns current step.</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+        </MotionItem>
+
         {workspace.me.role !== "OFFICER" && (
           <MotionItem>
           <Card className="panel-hover">
@@ -305,7 +352,7 @@ export default function SapfDashboard() {
       </MotionList>
 
       <MotionSection data-tour="dashboard-progress">
-      <Card>
+      <Card className="border-primary/20 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />

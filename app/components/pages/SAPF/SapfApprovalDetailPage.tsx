@@ -4,6 +4,7 @@ import {
   ErrorStateCard,
   PageHeader,
   PageShell,
+  StatusBadge,
 } from "@/app/components/UX";
 import ModalBase from "@/app/components/Popup/ModalBase";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
@@ -47,6 +48,39 @@ import {
 
 function ButtonSpinner() {
   return <Loader2 className="mr-2 h-4 w-4 animate-spin" />;
+}
+
+function currentWorkflowStep(request: any) {
+  return (
+    request.approvalSteps?.find((step: any) => step.status === "ACTIVE") ||
+    request.approvalSteps?.find((step: any) => step.status === "RETURNED") ||
+    null
+  );
+}
+
+function stepDueLabel(step: any) {
+  if (!step) return "No active deadline";
+  const timeoutByPosition: Record<string, number> = {
+    ADVISER: 2,
+    DEAN: 2,
+    SDS: 3,
+    SAS: 2,
+    VPAA_ASSISTANT: 2,
+    VPAA: 2,
+    UNIVERSITY_PRESIDENT: 3,
+    ADDITIONAL_SIGNATORY: 2,
+  };
+  const timeoutDays =
+    timeoutByPosition[String(step.position || "").toUpperCase()] ?? 3;
+  const activeAt = new Date(step.updatedAt || step.createdAt || Date.now()).getTime();
+  const dueAt = new Date(activeAt + timeoutDays * 24 * 60 * 60 * 1000).getTime();
+  const diffMs = dueAt - Date.now();
+  if (diffMs <= 0) return "Overdue";
+  const hours = Math.ceil(diffMs / (60 * 60 * 1000));
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  if (days <= 0) return `${remHours}h left`;
+  return `${days}d ${remHours}h left`;
 }
 
 export default function SapfApprovalDetailPage({
@@ -138,6 +172,22 @@ export default function SapfApprovalDetailPage({
     Boolean(sdsStep) &&
     reachedSds &&
     !["CANCELLED", "REJECTED"].includes(request.status);
+  const activeStep = currentWorkflowStep(request);
+  const isMyTurn = activeStep?.reviewerId === me?.id;
+  const reviewerSummary = isMyTurn
+    ? "Your decision needed now."
+    : activeStep
+      ? `Waiting on ${activeStep.reviewer?.name || activeStep.label}.`
+      : request.status === "APPROVED"
+        ? "Request fully approved."
+        : "No active review step.";
+  const pendingOfficerRequests = (request.changeRequests || []).filter(
+    (item: any) => item.status === "PENDING",
+  );
+  const hasPendingOfficerRequests = pendingOfficerRequests.length > 0;
+  const returnLoopCount = (request.activityLogs || []).filter(
+    (log: any) => log.action === "RETURNED",
+  ).length;
 
   const handleCancel = async () => {
     if (cancelling) return;
@@ -228,13 +278,114 @@ export default function SapfApprovalDetailPage({
         }
       />
 
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History className="h-5 w-5" />
+            Review Status
+          </CardTitle>
+          <CardDescription>
+            Reviewer-side summary of current workflow state.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Current status
+            </p>
+            <div className="mt-2">
+              <StatusBadge status={request.status} />
+            </div>
+          </div>
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Active step
+            </p>
+            <p className="mt-2 text-sm font-medium text-foreground">
+              {activeStep?.label || "No active step"}
+            </p>
+          </div>
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Review focus
+            </p>
+            <p className="mt-2 text-sm font-medium text-foreground">
+              {reviewerSummary}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-blue-500/20 bg-blue-500/5">
+        <CardHeader>
+          <CardTitle>Decision Brief</CardTitle>
+          <CardDescription>
+            Fast review snapshot before action.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-4">
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs text-muted-foreground">Due timer</p>
+            <p className="text-sm font-semibold text-foreground">
+              {stepDueLabel(activeStep)}
+            </p>
+          </div>
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs text-muted-foreground">Conflict state</p>
+            <p className="text-sm font-semibold text-foreground">
+              {request.conflictWarning ? "Pending conflict warning" : "No conflict warning"}
+            </p>
+          </div>
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs text-muted-foreground">Officer requests</p>
+            <p className="text-sm font-semibold text-foreground">
+              {pendingOfficerRequests.length} pending
+            </p>
+          </div>
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs text-muted-foreground">Recommended action</p>
+            <p className="text-sm font-semibold text-foreground">
+              {hasPendingOfficerRequests
+                ? "Open Officer Requests tab first"
+                : isMyTurn
+                  ? "Review details then decide"
+                  : "Monitor active reviewer"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+      {returnLoopCount >= 3 && (
+        <Card className="border-amber-500/30 bg-amber-500/10">
+          <CardHeader>
+            <CardTitle className="text-amber-700 dark:text-amber-300">
+              Return-loop warning
+            </CardTitle>
+            <CardDescription>
+              This request has been returned {returnLoopCount} times. Align on
+              exact revision scope before another return.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
       <Tabs defaultValue="details" className="space-y-4">
         <TabsList
           className={`grid w-full ${
-            showChat ? "grid-cols-3 md:w-[440px]" : "grid-cols-2 md:w-[320px]"
+            showChat
+              ? hasPendingOfficerRequests
+                ? "grid-cols-4 md:w-[620px]"
+                : "grid-cols-3 md:w-[440px]"
+              : hasPendingOfficerRequests
+                ? "grid-cols-3 md:w-[500px]"
+                : "grid-cols-2 md:w-[320px]"
           }`}
         >
           <TabsTrigger value="details">Details</TabsTrigger>
+          {hasPendingOfficerRequests && (
+            <TabsTrigger value="officer-requests">
+              Officer Requests
+            </TabsTrigger>
+          )}
           <TabsTrigger value="activity">
             <History className="h-4 w-4" />
             Activity
@@ -255,6 +406,34 @@ export default function SapfApprovalDetailPage({
         <TabsContent value="activity">
           <SapfActivityLog request={request} />
         </TabsContent>
+
+        {hasPendingOfficerRequests && (
+          <TabsContent value="officer-requests">
+            <Card className="border-blue-500/30 bg-blue-500/5">
+              <CardHeader>
+                <CardTitle>Officer Change Requests</CardTitle>
+                <CardDescription>
+                  Edit or cancellation requests waiting SDS decision.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {pendingOfficerRequests.map((item: any) => (
+                  <div
+                    key={item.id}
+                    className="rounded-md border bg-background p-3"
+                  >
+                    <p className="text-sm font-semibold text-foreground">
+                      {item.type === "EDIT" ? "Edit request" : "Cancellation request"}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {item.reason}
+                    </p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {showChat && (
           <TabsContent value="chat">

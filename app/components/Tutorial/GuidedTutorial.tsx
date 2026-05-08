@@ -30,6 +30,7 @@ type AppRole =
   | "ADMIN"
   | "SUPER_ADMIN"
   | "EQUIPMENT_PROVISIONER";
+type TutorialEligibleRole = "OFFICER" | "APPROVER";
 
 type TutorialStep = {
   id: string;
@@ -69,10 +70,7 @@ const commonClosingSteps: TutorialStep[] = [
   },
 ];
 
-const roleSteps: Record<
-  Exclude<AppRole, "SUPER_ADMIN" | "EQUIPMENT_PROVISIONER">,
-  TutorialStep[]
-> = {
+const roleSteps: Record<TutorialEligibleRole, TutorialStep[]> = {
   OFFICER: [
     {
       id: "dashboard-nav",
@@ -199,58 +197,11 @@ const roleSteps: Record<
     },
     ...commonClosingSteps,
   ],
-  ADMIN: [
-    {
-      id: "dashboard-nav",
-      title: "Dashboard",
-      body: "Use Dashboard as your operational home for requests, review progress, notifications, and recent workflow activity.",
-      selector: '[data-tour="nav-dashboard"]',
-      href: "/user/dashboard",
-      actionLabel: "Open Dashboard",
-    },
-    {
-      id: "dashboard-summary",
-      title: "System workload",
-      body: "These counters summarize active requests, old records, approved bookings, and private threads connected to your account.",
-      selector: '[data-tour="dashboard-summary"]',
-      href: "/user/dashboard",
-      actionLabel: "Open Dashboard",
-    },
-    {
-      id: "bookings-nav",
-      title: "Bookings",
-      body: "Click Bookings to review pending items, follow active workflows, and inspect old reservation records.",
-      selector: '[data-tour="nav-bookings"]',
-      href: "/user/bookings",
-      actionLabel: "Open Bookings",
-    },
-    {
-      id: "admin-tabs",
-      title: "Admin review tabs",
-      body: "Pending shows items ready for review. Following keeps active requests you are connected to. Old keeps final records.",
-      selector: '[data-tour="bookings-tabs"]',
-      href: "/user/bookings",
-      actionLabel: "Open Bookings",
-    },
-    {
-      id: "calendar-nav",
-      title: "Calendar",
-      body: "Click Calendar to watch campus-wide venue usage, pending reservations, and blocked schedules.",
-      selector: '[data-tour="nav-calendar"]',
-      href: "/user/calendar",
-      actionLabel: "Open Calendar",
-    },
-    {
-      id: "venues-nav",
-      title: "Venues",
-      body: "Click Venues to browse spaces, check capacity, and confirm university-wide blocks. Super admins handle venue record management.",
-      selector: '[data-tour="nav-spaces"]',
-      href: "/user/spaces",
-      actionLabel: "Open Venues",
-    },
-    ...commonClosingSteps,
-  ],
 };
+
+function isTutorialEligibleRole(role: AppRole): role is TutorialEligibleRole {
+  return role === "OFFICER" || role === "APPROVER";
+}
 
 function isVisible(element: Element) {
   const rect = element.getBoundingClientRect();
@@ -327,10 +278,12 @@ export default function GuidedTutorial({
   userRole,
   initialStatus,
   sessionId,
+  isFreshAccount,
 }: {
   userRole: AppRole;
   initialStatus: TutorialProgressStatus | null;
   sessionId: string;
+  isFreshAccount: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -340,18 +293,14 @@ export default function GuidedTutorial({
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const steps = useMemo(() => {
-    if (userRole === "SUPER_ADMIN" || userRole === "EQUIPMENT_PROVISIONER") {
-      return [];
-    }
-    return roleSteps[userRole] ?? [];
-  }, [userRole]);
+  const isEligibleRole = isTutorialEligibleRole(userRole);
+  const steps = useMemo(
+    () => (isEligibleRole ? roleSteps[userRole] : []),
+    [isEligibleRole, userRole],
+  );
   const step = steps[stepIndex];
   const shouldAutoStart =
-    userRole !== "SUPER_ADMIN" &&
-    userRole !== "EQUIPMENT_PROVISIONER" &&
-    initialStatus !== "COMPLETED" &&
-    initialStatus !== "CANCELLED";
+    isEligibleRole && initialStatus === null && isFreshAccount;
 
   const updateTargetRect = useCallback(() => {
     if (!active || !step?.selector) {
@@ -378,17 +327,13 @@ export default function GuidedTutorial({
   }, [active, step]);
 
   const beginTutorial = useCallback(() => {
-    if (
-      userRole === "SUPER_ADMIN" ||
-      userRole === "EQUIPMENT_PROVISIONER" ||
-      steps.length === 0
-    ) {
+    if (!isEligibleRole || steps.length === 0) {
       return;
     }
     setStepIndex(0);
     setActive(true);
     void startTutorialProgress();
-  }, [steps.length, userRole]);
+  }, [isEligibleRole, steps.length]);
 
   useEffect(() => {
     const onStart = () => beginTutorial();
@@ -489,6 +434,9 @@ export default function GuidedTutorial({
                 <Map className="h-5 w-5" />
               </div>
               <div className="min-w-0">
+                <span className="mb-2 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                  New account guide
+                </span>
                 <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
                   Step {stepIndex + 1} of {steps.length}
                 </p>
@@ -543,16 +491,26 @@ export default function GuidedTutorial({
                 </Button>
               )}
               <div className="flex flex-1 items-center justify-between gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setStepIndex((current) => current - 1)}
-                  disabled={stepIndex === 0 || saving}
-                  className="gap-2"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Back
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setStepIndex((current) => current - 1)}
+                    disabled={stepIndex === 0 || saving}
+                    className="gap-2"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => void saveAndClose("CANCELLED")}
+                    disabled={saving}
+                  >
+                    Skip for now
+                  </Button>
+                </div>
                 <Button
                   type="button"
                   onClick={() => {

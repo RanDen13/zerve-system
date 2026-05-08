@@ -67,9 +67,7 @@ export default function SystemSettingsPage({
   const [savingNotifications, setSavingNotifications] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [startingTutorial, setStartingTutorial] = useState(false);
-  const canRestartTutorial = ["OFFICER", "APPROVER", "ADMIN"].includes(
-    userRole,
-  );
+  const canRestartTutorial = ["OFFICER", "APPROVER"].includes(userRole);
 
   const handleSubmit = async (formData: FormData) => {
     setSaving(true);

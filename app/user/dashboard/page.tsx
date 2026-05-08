@@ -1,3 +1,4 @@
+import EquipmentDashboard from "@/app/components/pages/SAPF/EquipmentDashboard";
 import SapfDashboard from "@/app/components/pages/SAPF/SapfDashboard";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -13,7 +14,7 @@ const page = async () => {
   }
 
   if (session.user.role?.toUpperCase() === "EQUIPMENT_PROVISIONER") {
-    redirect("/user/equipment");
+    return <EquipmentDashboard />;
   }
 
   return <SapfDashboard />;

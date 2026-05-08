@@ -8,6 +8,7 @@ import DeactivatedNotice from "./DeactivatedNotice";
 import TermsAndConditionsPrompt from "./TermsAndConditionsPrompt";
 
 const layout = async ({ children }: { children: React.ReactNode }) => {
+  const FRESH_ACCOUNT_WINDOW_MS = 1000 * 60 * 60 * 24 * 14;
   const session = await auth.api.getSession({
     headers: await headers(),
   });
@@ -18,7 +19,7 @@ const layout = async ({ children }: { children: React.ReactNode }) => {
 
   const account = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { banned: true },
+    select: { banned: true, createdAt: true },
   });
 
   if (account?.banned) {
@@ -35,8 +36,14 @@ const layout = async ({ children }: { children: React.ReactNode }) => {
     | "ADMIN"
     | "SUPER_ADMIN"
     | "EQUIPMENT_PROVISIONER";
+  const tutorialEligible = ["OFFICER", "APPROVER"].includes(userRole || "");
+  const freshAccountForTutorial = Boolean(
+    account?.createdAt &&
+      Date.now() - new Date(account.createdAt).getTime() <=
+        FRESH_ACCOUNT_WINDOW_MS,
+  );
   const tutorialProgress =
-    userRole !== "SUPER_ADMIN"
+    tutorialEligible
       ? await prisma.userTutorialProgress.findUnique({
           where: {
             userId_role: {
@@ -63,6 +70,7 @@ const layout = async ({ children }: { children: React.ReactNode }) => {
         userRole={userRole}
         initialStatus={tutorialProgress?.status ?? null}
         sessionId={session.session.id}
+        isFreshAccount={freshAccountForTutorial}
       />
     </div>
   );
