@@ -15,8 +15,8 @@ export const EQUIPMENT_SUPPORT_FIELDS = [
     quantityField: "lcdProjectorQty",
   },
   {
-    supportLabel: "One Long Table",
-    defaultName: "Long Table",
+    supportLabel: "Tables",
+    defaultName: "Tables",
     quantityField: "longTableQty",
   },
   {
@@ -26,12 +26,26 @@ export const EQUIPMENT_SUPPORT_FIELDS = [
   },
 ] as const;
 
+export const SUPPORT_REQUEST_ALIASES: Record<string, string> = {
+  "One Long Table": "Tables",
+  "Long Table": "Tables",
+  Tables: "Tables",
+  Chairs: "Chairs",
+};
+
 export const EQUIPMENT_SUPPORT_LABELS = EQUIPMENT_SUPPORT_FIELDS.map(
   (item) => item.supportLabel,
 );
 
+export function normalizeSupportRequestLabel(label: string) {
+  return SUPPORT_REQUEST_ALIASES[label] || label;
+}
+
 export function equipmentFieldForSupportLabel(label: string) {
-  return EQUIPMENT_SUPPORT_FIELDS.find((item) => item.supportLabel === label);
+  const normalized = normalizeSupportRequestLabel(label);
+  return EQUIPMENT_SUPPORT_FIELDS.find(
+    (item) => item.supportLabel === normalized,
+  );
 }
 
 export function parseEquipmentQuantity(value: unknown) {

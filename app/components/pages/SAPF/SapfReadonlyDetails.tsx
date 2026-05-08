@@ -453,7 +453,7 @@ export default function SapfReadonlyDetails({
                 "LCD Projector Quantity",
                 part2.lcdProjectorQty,
               ),
-              "One Long Table": supportDetail(
+              Tables: supportDetail(
                 "Table Quantity",
                 part2.longTableQty,
               ),

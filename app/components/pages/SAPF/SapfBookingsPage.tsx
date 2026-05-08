@@ -36,6 +36,12 @@ import {
 } from "./SapfRequestFilters";
 
 type BookingTab = "pending" | "following" | "history";
+type QuickFilter =
+  | "all"
+  | "needs_my_decision"
+  | "has_concern"
+  | "has_officer_request"
+  | "has_conflict";
 const EMPTY_REQUESTS: any[] = [];
 
 function ButtonSpinner() {
@@ -93,6 +99,7 @@ export default function SapfBookingsPage() {
   const [tabRequests, setTabRequests] = useState<Record<string, any[]>>({});
   const [loadingTab, setLoadingTab] = useState<BookingTab | null>("pending");
   const [filters, setFilters] = useState(emptySapfRequestFilters);
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
 
   const loadTab = async (tab: BookingTab, force = false) => {
     if (!force && tabRequests[tab]) return;
@@ -131,6 +138,34 @@ export default function SapfBookingsPage() {
     () => filterSapfRequests(currentRequests, filters),
     [currentRequests, filters],
   );
+  const quickFilteredRequests = useMemo(() => {
+    if (quickFilter === "all") return filteredRequests;
+
+    return filteredRequests.filter((request: any) => {
+      if (quickFilter === "needs_my_decision") {
+        return request.approvalSteps?.some(
+          (step: any) =>
+            step.status === "ACTIVE" &&
+            (step.reviewerId === me?.id || me?.role === "SUPER_ADMIN"),
+        );
+      }
+      if (quickFilter === "has_concern") {
+        return request.approvalSteps?.some(
+          (step: any) =>
+            step.concernThread &&
+            step.concernThread.status !== "RESOLVED" &&
+            ["ACTIVE", "RETURNED"].includes(step.status),
+        );
+      }
+      if (quickFilter === "has_officer_request") {
+        return request.changeRequests?.some((item: any) => item.status === "PENDING");
+      }
+      if (quickFilter === "has_conflict") {
+        return Boolean(request.conflictWarning);
+      }
+      return true;
+    });
+  }, [filteredRequests, me?.id, me?.role, quickFilter]);
   const statusOptions = useMemo(
     () => uniqueSapfStatuses(currentRequests),
     [currentRequests],
@@ -143,9 +178,12 @@ export default function SapfBookingsPage() {
   }> = [
     {
       value: "pending",
-      label: "Pending",
+      label: me?.role === "OFFICER" ? "In Progress" : "Needs Review",
       icon: <Clock className="h-4 w-4" />,
-      empty: "No pending requests match your filters.",
+      empty:
+        me?.role === "OFFICER"
+          ? "No in-progress requests match your filters."
+          : "No review-queue requests match your filters.",
     },
     ...(me?.role === "OFFICER"
       ? []
@@ -159,9 +197,9 @@ export default function SapfBookingsPage() {
         ]),
     {
       value: "history",
-      label: "History",
+      label: "Closed",
       icon: <History className="h-4 w-4" />,
-      empty: "No history records match your filters.",
+      empty: "No closed records match your filters.",
     },
   ];
 
@@ -194,13 +232,17 @@ export default function SapfBookingsPage() {
     <PageShell>
       <MotionSection>
         <PageHeader
-          title="Bookings"
-          description="Pending requests, followed reviews, and reservation history in one searchable workspace."
+          title={me.role === "OFFICER" ? "My Requests" : "Review Tracking"}
+          description={
+            me.role === "OFFICER"
+              ? "Drafts, active reservations, and closed requests in one searchable workspace."
+              : "Requests waiting for your action, requests you follow, and closed records."
+          }
           actions={
             <>
               {me.role === "OFFICER" && (
                 <Button asChild>
-                  <Link href="/user/bookings/create">Create booking</Link>
+                  <Link href="/user/bookings/create">Start new request</Link>
                 </Button>
               )}
               <Button
@@ -227,6 +269,7 @@ export default function SapfBookingsPage() {
             const tab = value as BookingTab;
             setActiveTab(tab);
             setFilters(emptySapfRequestFilters);
+            setQuickFilter("all");
             void loadTab(tab);
           }}
           className="space-y-4"
@@ -256,9 +299,31 @@ export default function SapfBookingsPage() {
             value={filters}
             onChange={setFilters}
             statuses={statusOptions}
-            resultCount={filteredRequests.length}
+            resultCount={quickFilteredRequests.length}
             totalCount={currentRequests.length}
           />
+          {me.role !== "OFFICER" && (
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "all", label: "All" },
+                { key: "needs_my_decision", label: "Needs my decision" },
+                { key: "has_concern", label: "Has concern" },
+                { key: "has_officer_request", label: "Officer request" },
+                { key: "has_conflict", label: "Has conflict" },
+              ].map((chip) => (
+                <Button
+                  key={chip.key}
+                  type="button"
+                  size="sm"
+                  variant={quickFilter === chip.key ? "default" : "outline"}
+                  onClick={() => setQuickFilter(chip.key as QuickFilter)}
+                  className="h-8"
+                >
+                  {chip.label}
+                </Button>
+              ))}
+            </div>
+          )}
 
           {tabItems.map((item) => (
             <TabsContent key={item.value} value={item.value}>
@@ -270,7 +335,7 @@ export default function SapfBookingsPage() {
                   />
                 ) : (
                   <RequestList
-                    requests={filteredRequests}
+                    requests={quickFilteredRequests}
                     hrefFor={(request) =>
                       me.role === "OFFICER"
                         ? `/user/bookings/${request.id}`

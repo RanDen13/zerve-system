@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { v4 as uuid } from "uuid";
 
-const tutorialRoles = ["OFFICER", "APPROVER", "ADMIN"] as const;
+const tutorialRoles = ["OFFICER", "APPROVER"] as const;
 
 type TutorialRole = (typeof tutorialRoles)[number];
 export type TutorialProgressStatus = "STARTED" | "COMPLETED" | "CANCELLED";
@@ -35,10 +35,13 @@ async function getAuthorizedTutorialRole() {
     };
   }
 
-  if (user.role?.toUpperCase() === "SUPER_ADMIN") {
+  if (
+    user.role?.toUpperCase() === "SUPER_ADMIN" ||
+    user.role?.toUpperCase() === "ADMIN"
+  ) {
     return {
       ok: false as const,
-      message: "The tutorial is not available for super admins.",
+      message: "The tutorial is not available for admins or super admins.",
     };
   }
 

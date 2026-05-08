@@ -25,6 +25,7 @@ import {
   validateSapfEquipmentAvailability,
 } from "./EquipmentActions";
 import { normalizeSapfRequest } from "./sapfData";
+import { normalizeSupportRequestLabel } from "./sapfEquipment";
 import {
   addSapfCalendarDays,
   formatSapfDateForMessage,
@@ -69,6 +70,16 @@ const DEFAULT_BOOKING_ADVANCE_DAYS = 30;
 const MAX_SDS_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const MAX_PROGRAM_FLOW_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const APPROVAL_TIMEOUT_DAYS = 3;
+const APPROVAL_TIMEOUT_DAYS_BY_POSITION: Record<string, number> = {
+  ADVISER: 2,
+  DEAN: 2,
+  SDS: 3,
+  SAS: 2,
+  VPAA_ASSISTANT: 2,
+  VPAA: 2,
+  UNIVERSITY_PRESIDENT: 3,
+  ADDITIONAL_SIGNATORY: 2,
+};
 const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
 const ADMIN_ROLE = "ADMIN";
 const venueBlockTypes = ["UNIVERSITY_WIDE", "SYSTEM_MAINTENANCE"] as const;
@@ -413,6 +424,38 @@ function canMessageConcernThread(stepStatus: string) {
   return ["ACTIVE", "RETURNED"].includes(stepStatus);
 }
 
+function supportRequestValuesFromData(data: FormData) {
+  return [
+    ...new Set(
+      data
+        .getAll("supportRequests")
+        .map(String)
+        .map((value) => normalizeSupportRequestLabel(value))
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function requestNeedsBudgetSignatory(data: FormData) {
+  return supportRequestValuesFromData(data).includes("Budget");
+}
+
+function isFinanceApproverUser(user: {
+  email?: string | null;
+  name?: string | null;
+  accounts?: Array<{ title?: string | null }>;
+}) {
+  const searchFields = [
+    user.name,
+    user.email,
+    ...(user.accounts || []).map((account) => account.title),
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+
+  return searchFields.some((value) => value.includes("finance"));
+}
+
 async function nextRequestNumber() {
   const year = new Date().getFullYear();
   const count = await prisma.sAPFRequest.count({
@@ -542,9 +585,62 @@ function approvalTimeoutDays() {
   return APPROVAL_TIMEOUT_DAYS;
 }
 
+function approvalTimeoutDaysForPosition(position?: string | null) {
+  const normalized = String(position || "").toUpperCase();
+  return APPROVAL_TIMEOUT_DAYS_BY_POSITION[normalized] ?? approvalTimeoutDays();
+}
+
 function approvalStepTimedOut(step: { position: string; updatedAt: Date }) {
-  const timeoutMs = approvalTimeoutDays() * 24 * 60 * 60 * 1000;
+  const timeoutMs =
+    approvalTimeoutDaysForPosition(step.position) * 24 * 60 * 60 * 1000;
   return Date.now() - new Date(step.updatedAt).getTime() >= timeoutMs;
+}
+
+async function sendApprovalTimeoutReminder({
+  request,
+  activeStep,
+  hoursRemaining,
+}: {
+  request: any;
+  activeStep: any;
+  hoursRemaining: number;
+}) {
+  const stageLabel = hoursRemaining <= 4 ? "4H" : "24H";
+  const title =
+    hoursRemaining <= 4
+      ? "Approval timeout soon (4h)"
+      : "Approval timeout reminder (24h)";
+  const existing = await prisma.notification.findFirst({
+    where: {
+      userId: activeStep.reviewerId,
+      requestId: request.id,
+      title,
+      type: "APPROVAL" as any,
+      createdAt: {
+        gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      },
+    },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  await createNotification(
+    activeStep.reviewerId,
+    title,
+    `${request.requestNumber} is close to timeout at ${activeStep.label}.`,
+    "APPROVAL",
+    request.id,
+  );
+  await notifyApproverForSapfReview({
+    requestId: request.id,
+    reviewerId: activeStep.reviewerId,
+    title:
+      hoursRemaining <= 4
+        ? "Final reminder: approval timeout in ~4 hours"
+        : "Reminder: approval timeout within 24 hours",
+    eyebrow: `Timeout reminder (${stageLabel})`,
+    message: `${request.requestNumber} is still waiting on your ${activeStep.label} decision.`,
+  });
 }
 
 async function enforceSapfApprovalTimeouts(options: { requestId?: string } = {}) {
@@ -571,10 +667,27 @@ async function enforceSapfApprovalTimeouts(options: { requestId?: string } = {})
   });
 
   for (const request of overdueRequests) {
+    const reminderStep = request.approvalSteps[0];
+    if (reminderStep) {
+      const timeoutDays = approvalTimeoutDaysForPosition(reminderStep.position);
+      const timeoutMs = timeoutDays * 24 * 60 * 60 * 1000;
+      const elapsedMs =
+        Date.now() - new Date(reminderStep.updatedAt).getTime();
+      const remainingMs = timeoutMs - elapsedMs;
+      const remainingHours = remainingMs / (60 * 60 * 1000);
+      if (remainingMs > 0 && remainingHours <= 24) {
+        await sendApprovalTimeoutReminder({
+          request,
+          activeStep: reminderStep,
+          hoursRemaining: remainingHours <= 4 ? 4 : 24,
+        });
+      }
+    }
+
     const activeStep = request.approvalSteps.find(approvalStepTimedOut);
     if (!activeStep) continue;
 
-    const days = approvalTimeoutDays();
+    const days = approvalTimeoutDaysForPosition(activeStep.position);
     const comment = `${activeStep.label} did not respond within ${days} days. The reservation was automatically cancelled.`;
 
     await prisma.$transaction(async (tx) => {
@@ -1096,7 +1209,8 @@ function part6Changes(existing: any, data: FormData) {
 
 async function buildApprovalChain(data: FormData) {
   const adviserId = field(data, "adviserId");
-  const additionalSignatoryIds = data
+  const budgetRequested = requestNeedsBudgetSignatory(data);
+  const requestedAdditionalSignatoryIds = data
     .getAll("additionalSignatoryIds")
     .map(String)
     .filter(Boolean);
@@ -1149,19 +1263,28 @@ async function buildApprovalChain(data: FormData) {
     });
   }
 
-  if (additionalSignatoryIds.length > 0) {
+  if (requestedAdditionalSignatoryIds.length > 0) {
     const insertAt = steps.findIndex((step) => step.position === "VPAA");
     const additionalUsers = await prisma.user.findMany({
       where: {
-        id: { in: additionalSignatoryIds },
+        id: { in: requestedAdditionalSignatoryIds },
       },
       select: {
         id: true,
         name: true,
+        email: true,
+        accounts: {
+          where: { providerId: "credential" },
+          select: { title: true },
+        },
       },
     });
 
-    const additionalSteps = additionalUsers.map((user) => ({
+    const filteredAdditionalUsers = additionalUsers.filter((user) =>
+      budgetRequested ? true : !isFinanceApproverUser(user),
+    );
+
+    const additionalSteps = filteredAdditionalUsers.map((user) => ({
       id: uuid(),
       stepOrder: 0,
       position: "ADDITIONAL_SIGNATORY",
@@ -1458,6 +1581,44 @@ function sapfFollowingWhere(role: UserRoleValue, userId: string) {
   };
 }
 
+function requestFirstScheduleStart(request: any) {
+  const schedules = Array.isArray(request.schedules) ? request.schedules : [];
+  if (!schedules.length) return Number.POSITIVE_INFINITY;
+  return new Date(schedules[0].startAt).getTime();
+}
+
+function requestActiveStep(request: any, userId: string) {
+  return (request.approvalSteps || []).find(
+    (step: any) => step.status === "ACTIVE" && step.reviewerId === userId,
+  );
+}
+
+function approvalStepUrgencyRank(request: any, userId: string) {
+  const activeStep = requestActiveStep(request, userId);
+  if (!activeStep) return Number.NEGATIVE_INFINITY;
+
+  const activeAt = new Date(activeStep.updatedAt || request.updatedAt).getTime();
+  const timeoutAt =
+    activeAt +
+    approvalTimeoutDaysForPosition(activeStep.position) * 24 * 60 * 60 * 1000;
+  const timeLeftMs = timeoutAt - Date.now();
+  const waitingMs = Date.now() - activeAt;
+  const eventStartMs = requestFirstScheduleStart(request);
+
+  // Higher score = show earlier in queue.
+  const timeoutScore =
+    timeLeftMs <= 0
+      ? 1_000_000_000
+      : Math.max(0, 1_000_000_000 - timeLeftMs / (60 * 1000));
+  const waitingScore = Math.max(0, waitingMs / (60 * 1000));
+  const eventScore =
+    Number.isFinite(eventStartMs) && eventStartMs > Date.now()
+      ? Math.max(0, 1_000_000 - (eventStartMs - Date.now()) / (60 * 1000))
+      : 0;
+
+  return timeoutScore + waitingScore + eventScore;
+}
+
 export async function getSapfRequestList({
   surface,
   view,
@@ -1524,6 +1685,14 @@ export async function getSapfRequestList({
         updatedAt: "desc",
       },
     });
+    const rankedRequests =
+      role !== "OFFICER" && view === "pending"
+        ? [...requests].sort(
+            (a: any, b: any) =>
+              approvalStepUrgencyRank(b, user.id) -
+              approvalStepUrgencyRank(a, user.id),
+          )
+        : requests;
 
     return {
       success: true,
@@ -1534,7 +1703,9 @@ export async function getSapfRequestList({
           email: user.email,
           role,
         },
-        requests: requests.map((request: any) => normalizeSapfRequest(request)),
+        requests: rankedRequests.map((request: any) =>
+          normalizeSapfRequest(request),
+        ),
       }),
     };
   } catch (error) {
@@ -3317,6 +3488,18 @@ export async function reviewSapfRequest(
     const requestId = field(data, "requestId");
     const stepId = field(data, "stepId");
     const comment = field(data, "comment");
+    const reasonTagInput = field(data, "reasonTag").toUpperCase();
+    const allowedReasonTags = [
+      "POLICY",
+      "SCHEDULE",
+      "REQUIREMENTS",
+      "SAFETY",
+      "BUDGET",
+      "OTHER",
+    ];
+    const reasonTag = allowedReasonTags.includes(reasonTagInput)
+      ? reasonTagInput
+      : "OTHER";
 
     await enforceSapfApprovalTimeouts({ requestId });
 
@@ -3437,6 +3620,7 @@ export async function reviewSapfRequest(
             stepId: step.id,
             stepLabel: step.label,
             reason: comment,
+            reasonTag,
           },
         });
       });
@@ -3510,9 +3694,36 @@ export async function reviewSapfRequest(
             stepId: step.id,
             stepLabel: step.label,
             reason: comment,
+            reasonTag,
           },
         });
       });
+
+      const returnCount = await prisma.approvalAction.count({
+        where: {
+          requestId: request.id,
+          action: "RETURNED" as any,
+        },
+      });
+      if (returnCount >= 3) {
+        const escalationUsers = await prisma.user.findMany({
+          where: {
+            role: { in: [ADMIN_ROLE, SUPER_ADMIN_ROLE] as any },
+          },
+          select: { id: true },
+        });
+        await Promise.all(
+          escalationUsers.map((target) =>
+            createNotification(
+              target.id,
+              "High return-loop warning",
+              `${request.requestNumber} has been returned ${returnCount} times.`,
+              "REQUEST",
+              request.id,
+            ),
+          ),
+        );
+      }
 
       await createNotification(
         request.officerId,
@@ -3575,6 +3786,25 @@ export async function reviewSapfRequest(
     const nextStep = request.approvalSteps.find(
       (item) => item.stepOrder > step.stepOrder && item.status === "PENDING",
     );
+    if (
+      nextStep &&
+      !["ADVISER", "DEAN", "ADDITIONAL_SIGNATORY"].includes(nextStep.position)
+    ) {
+      const activeAssignment = await prisma.approverPositionUser.findFirst({
+        where: {
+          userId: nextStep.reviewerId,
+          position: nextStep.position as any,
+          active: true,
+        },
+        select: { id: true },
+      });
+      if (!activeAssignment) {
+        return {
+          success: false,
+          message: `${nextStep.label} assignment changed or became inactive. Ask super admin to fix approver positions first.`,
+        };
+      }
+    }
 
     if (!nextStep) {
       const conflict = await detectConflicts(

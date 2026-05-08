@@ -39,8 +39,14 @@ function globalBlockLabel(block: any) {
     : "University-wide block";
 }
 
-function venueCalendarHref(venueId: string, startAt: Date | string) {
-  return `/calendar/${venueId}?date=${formatSapfDateInputValue(startAt)}`;
+function venueCalendarHref(
+  venueId: string,
+  startAt: Date | string,
+  kiosk: boolean,
+) {
+  return `/calendar/${venueId}?date=${formatSapfDateInputValue(startAt)}${
+    kiosk ? "&kiosk=true" : ""
+  }`;
 }
 
 export default function AllEventsCalendar({
@@ -49,12 +55,14 @@ export default function AllEventsCalendar({
   title = "All Venue Events",
   description = "Campus-wide view of reservations and blocked schedules.",
   initialDate,
+  kiosk = false,
 }: {
   venues: any[];
   globalBlocks: any[];
   title?: string;
   description?: string;
   initialDate?: string;
+  kiosk?: boolean;
 }) {
   const items = useMemo<VenueCalendarItem[]>(() => {
     return [
@@ -74,7 +82,7 @@ export default function AllEventsCalendar({
               request.setting === "Off-Campus"
                 ? ("OFF_CAMPUS" as const)
                 : ("VENUE" as const),
-            href: venueCalendarHref(venue.id, schedule.startAt),
+            href: venueCalendarHref(venue.id, schedule.startAt, kiosk),
           })),
         ),
       ),
@@ -88,7 +96,7 @@ export default function AllEventsCalendar({
             endAt: schedule.endAt,
             status: "BLOCKED" as const,
             scope: "VENUE" as const,
-            href: venueCalendarHref(venue.id, schedule.startAt),
+            href: venueCalendarHref(venue.id, schedule.startAt, kiosk),
           })),
         ),
       ),
@@ -106,7 +114,7 @@ export default function AllEventsCalendar({
     ].sort(
       (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
     );
-  }, [globalBlocks, venues]);
+  }, [globalBlocks, kiosk, venues]);
 
   return (
     <VenueMonthCalendar
@@ -115,6 +123,7 @@ export default function AllEventsCalendar({
       title={title}
       description={description}
       initialDate={initialDate}
+      kiosk={kiosk}
     />
   );
 }

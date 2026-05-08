@@ -5,6 +5,16 @@ import {
 import { prisma } from "@/lib/prisma";
 import { v4 as uuid } from "uuid";
 
+type ApproverPositionValue =
+  | "ADVISER"
+  | "DEAN"
+  | "SDS"
+  | "SAS"
+  | "ADDITIONAL_SIGNATORY"
+  | "VPAA_ASSISTANT"
+  | "VPAA"
+  | "UNIVERSITY_PRESIDENT";
+
 async function createAccount(
   email: string,
   password: string,
@@ -27,6 +37,27 @@ async function createAccount(
   );
 }
 
+async function assignApproverPosition(
+  userId: string,
+  position: ApproverPositionValue,
+) {
+  await prisma.approverPositionUser.upsert({
+    where: {
+      userId_position: {
+        userId,
+        position,
+      },
+    },
+    update: { active: true },
+    create: {
+      id: uuid(),
+      userId,
+      position,
+      active: true,
+    },
+  });
+}
+
 async function main() {
   console.log("Seeding officer-only SAPF reservation system...");
 
@@ -37,6 +68,68 @@ async function main() {
     "SUPER_ADMIN",
   );
 
+  const seededApprovers = await Promise.all([
+    createAccount(
+      "mock.sas@email.lcup.edu.ph",
+      "SAS_Mock123",
+      "Mock SAS Approver",
+      "APPROVER",
+      "Student Affairs Services Director",
+    ),
+    createAccount(
+      "mock.vpaa.asst@email.lcup.edu.ph",
+      "VPAA_Asst123",
+      "Mock VPAA Assistant",
+      "APPROVER",
+      "Vice President for Academic Affairs Assistant",
+    ),
+    createAccount(
+      "mock.vpaa@email.lcup.edu.ph",
+      "VPAA_Mock123",
+      "Mock VPAA",
+      "APPROVER",
+      "Vice President for Academic Affairs",
+    ),
+    createAccount(
+      "mock.president@email.lcup.edu.ph",
+      "President123",
+      "Mock University President",
+      "APPROVER",
+      "University President",
+    ),
+    createAccount(
+      "mock.vp.finance@email.lcup.edu.ph",
+      "VPFinance123",
+      "Mock Additional Signatory 1",
+      "APPROVER",
+      "Vice President for Finance and Administration",
+    ),
+    createAccount(
+      "mock.vp.research@email.lcup.edu.ph",
+      "VPResearch123",
+      "Mock Additional Signatory 2",
+      "APPROVER",
+      "Vice President Research and Innovation",
+    ),
+    createAccount(
+      "mock.vp.spiritual@email.lcup.edu.ph",
+      "VPSpiritual123",
+      "Mock Additional Signatory 3",
+      "APPROVER",
+      "Vice President for Spiritual Formation and Extension",
+    ),
+  ]);
+
+  await Promise.all([
+    assignApproverPosition(seededApprovers[0].id, "SAS"),
+    assignApproverPosition(seededApprovers[1].id, "VPAA_ASSISTANT"),
+    assignApproverPosition(seededApprovers[2].id, "VPAA"),
+    assignApproverPosition(seededApprovers[3].id, "UNIVERSITY_PRESIDENT"),
+    assignApproverPosition(seededApprovers[4].id, "ADDITIONAL_SIGNATORY"),
+    assignApproverPosition(seededApprovers[5].id, "ADDITIONAL_SIGNATORY"),
+    assignApproverPosition(seededApprovers[6].id, "ADDITIONAL_SIGNATORY"),
+  ]);
+
   const amenities = await Promise.all(
     [
       ["a1", "WiFi", "wifi"],
@@ -44,7 +137,8 @@ async function main() {
       ["a3", "Sound System", "sound"],
       ["a4", "Stage", "stage"],
       ["a5", "Air Conditioning", "air"],
-      ["a6", "One Long Table", "chairs"],
+      ["a6", "Tables", "tables"],
+      ["a7", "Chairs", "chairs"],
     ].map(([id, name, icon]) =>
       prisma.amenity.upsert({
         where: { id },
@@ -54,14 +148,14 @@ async function main() {
     ),
   );
 
-  const [wifi, projector, sound, stage, air, chairs] = amenities;
+  const [wifi, projector, sound, stage, air, tables, chairs] = amenities;
 
   await Promise.all(
     [
       ["eq_sound_system", "Sound System", "Sound System", 1],
       ["eq_microphone", "Microphone", "Microphone", 10],
       ["eq_lcd_projector", "LCD Projector", "LCD Projector", 3],
-      ["eq_long_table", "Long Table", "One Long Table", 20],
+      ["eq_long_table", "Tables", "Tables", 20],
       ["eq_chairs", "Chairs", "Chairs", 100],
     ].map(([id, name, supportLabel, totalQuantity]) =>
       prisma.equipmentItem.upsert({
@@ -100,6 +194,7 @@ async function main() {
           { id: sound.id },
           { id: stage.id },
           { id: air.id },
+          { id: tables.id },
           { id: chairs.id },
         ],
       },
@@ -117,7 +212,7 @@ async function main() {
       description: "Open floor venue for large organization activities.",
       status: "ACTIVE",
       amenities: {
-        connect: [{ id: sound.id }, { id: chairs.id }],
+        connect: [{ id: sound.id }, { id: tables.id }, { id: chairs.id }],
       },
     },
   });
@@ -158,6 +253,20 @@ async function main() {
   console.log("Seed complete.");
   console.log(
     "Super admin: ryanphilippeiori.cu@email.lcup.edu.ph / Super_Admin123",
+  );
+  console.log("Mock approver accounts:");
+  console.log("SAS: mock.sas@email.lcup.edu.ph / SAS_Mock123");
+  console.log("VPAA Assistant: mock.vpaa.asst@email.lcup.edu.ph / VPAA_Asst123");
+  console.log("VPAA: mock.vpaa@email.lcup.edu.ph / VPAA_Mock123");
+  console.log("University President: mock.president@email.lcup.edu.ph / President123");
+  console.log(
+    "Additional Signatory 1: mock.vp.finance@email.lcup.edu.ph / VPFinance123",
+  );
+  console.log(
+    "Additional Signatory 2: mock.vp.research@email.lcup.edu.ph / VPResearch123",
+  );
+  console.log(
+    "Additional Signatory 3: mock.vp.spiritual@email.lcup.edu.ph / VPSpiritual123",
   );
 }
 

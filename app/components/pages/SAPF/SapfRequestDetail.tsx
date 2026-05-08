@@ -63,6 +63,7 @@ import SapfReadonlyDetails from "./SapfReadonlyDetails";
 import { formatSapfDate, formatSapfTime } from "./sapfSchedule";
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const APPROVAL_TIMEOUT_DAYS = 3;
 
 type SapfWeatherDay = {
   date: string;
@@ -275,6 +276,13 @@ export function RequestSummary({
   const waitingSince = request.approvalSteps?.find(
     (step: any) => step.status === "ACTIVE",
   )?.updatedAt;
+  const activeStep = requestActiveStep(request);
+  const openConcernCount = (request.approvalSteps || []).filter(
+    (step: any) =>
+      step.concernThread &&
+      step.concernThread.status !== "RESOLVED" &&
+      ["ACTIVE", "RETURNED"].includes(step.status),
+  ).length;
 
   return (
     <motion.article
@@ -320,8 +328,22 @@ export function RequestSummary({
           {showConflict && request.conflictWarning && (
             <StatusBadge label="Pending conflict" tone="warning" />
           )}
+          {activeStep && (
+            <StatusBadge
+              label={deadlineLabel(activeStep)}
+              tone={deadlineTone(activeStep)}
+            />
+          )}
           {request.setting === "Off-Campus" && (
             <StatusBadge label="Off-campus" tone="info" />
+          )}
+          {openConcernCount > 0 && (
+            <StatusBadge
+              label={`${openConcernCount} open concern${
+                openConcernCount === 1 ? "" : "s"
+              }`}
+              tone="warning"
+            />
           )}
           {showPdf && request.status === "APPROVED" && (
             <a
@@ -341,6 +363,52 @@ export function RequestSummary({
       {showProgress && <ApprovalProgressTimeline request={request} compact />}
     </motion.article>
   );
+}
+
+function requestActiveStep(request: any) {
+  return (request.approvalSteps || []).find((step: any) => step.status === "ACTIVE");
+}
+
+function approvalDeadline(step: any) {
+  if (!step) return null;
+  const timeoutByPosition: Record<string, number> = {
+    ADVISER: 2,
+    DEAN: 2,
+    SDS: 3,
+    SAS: 2,
+    VPAA_ASSISTANT: 2,
+    VPAA: 2,
+    UNIVERSITY_PRESIDENT: 3,
+    ADDITIONAL_SIGNATORY: 2,
+  };
+  const timeoutDays =
+    timeoutByPosition[String(step.position || "").toUpperCase()] ??
+    APPROVAL_TIMEOUT_DAYS;
+  const activeAt = new Date(step.updatedAt || step.createdAt || Date.now()).getTime();
+  return new Date(
+    activeAt + timeoutDays * 24 * 60 * 60 * 1000,
+  );
+}
+
+function deadlineLabel(step: any) {
+  const dueAt = approvalDeadline(step);
+  if (!dueAt) return "No active deadline";
+  const diffMs = dueAt.getTime() - Date.now();
+  if (diffMs <= 0) return "Overdue";
+  const hours = Math.ceil(diffMs / (60 * 60 * 1000));
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  if (days <= 0) return `${remHours}h left`;
+  return `${days}d ${remHours}h left`;
+}
+
+function deadlineTone(step: any): "danger" | "warning" | "info" {
+  const dueAt = approvalDeadline(step);
+  if (!dueAt) return "info";
+  const diffMs = dueAt.getTime() - Date.now();
+  if (diffMs <= 0) return "danger";
+  if (diffMs <= 24 * 60 * 60 * 1000) return "warning";
+  return "info";
 }
 
 export function SapfActivityLog({ request }: { request: any }) {
@@ -794,6 +862,13 @@ function ReviewControls({
   const [attachmentNames, setAttachmentNames] = useState<string[]>([]);
   const [attachmentInputKey, setAttachmentInputKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [returnTemplate, setReturnTemplate] = useState("");
+  const [reviewChecklist, setReviewChecklist] = useState({
+    scheduleChecked: false,
+    supportChecked: false,
+    attachmentsChecked: false,
+  });
+  const [reasonTag, setReasonTag] = useState("OTHER");
   if (me?.role === "SUPER_ADMIN") return null;
   const step = request.approvalSteps?.find(
     (item: any) => item.status === "ACTIVE" && item.reviewerId === me.id,
@@ -848,11 +923,27 @@ function ReviewControls({
       : selectedAction === "return"
         ? "What should the officer revise?"
         : "Why is this request rejected?";
+  const returnTemplates = [
+    "Incomplete details",
+    "Schedule conflict",
+    "Missing attachment",
+    "Policy mismatch",
+  ];
+  const approveChecklistComplete =
+    reviewChecklist.scheduleChecked &&
+    reviewChecklist.supportChecked &&
+    reviewChecklist.attachmentsChecked;
   const attachmentLimitExceeded = attachmentTotal > MAX_ATTACHMENT_BYTES;
   const deanOptions = approvers?.DEAN || [];
   const requiresDeanSelection =
     step.position === "ADVISER" && selectedAction === "approve";
   const missingDeanOptions = requiresDeanSelection && deanOptions.length === 0;
+  const nextPendingStep = request.approvalSteps?.find(
+    (item: any) => item.stepOrder > step.stepOrder && item.status === "PENDING",
+  );
+  const approveHandoffLabel = requiresDeanSelection
+    ? "Dean (selected in this action)"
+    : (nextPendingStep?.label || "Final approval");
 
   const yesNoField = (name: string, label: string) => (
     <div className="space-y-2">
@@ -1023,7 +1114,16 @@ function ReviewControls({
         <Button
           type="button"
           className="w-full bg-emerald-600 hover:bg-emerald-700"
-          onClick={() => setSelectedAction("approve")}
+          onClick={() => {
+            setReturnTemplate("");
+            setReviewChecklist({
+              scheduleChecked: false,
+              supportChecked: false,
+              attachmentsChecked: false,
+            });
+            setReasonTag("OTHER");
+            setSelectedAction("approve");
+          }}
           disabled={submitting}
         >
           <CheckCircle className="mr-2 h-4 w-4" />
@@ -1033,7 +1133,11 @@ function ReviewControls({
           type="button"
           variant="outline"
           className="w-full"
-          onClick={() => setSelectedAction("return")}
+          onClick={() => {
+            setReturnTemplate("");
+            setReasonTag("OTHER");
+            setSelectedAction("return");
+          }}
           disabled={submitting}
         >
           <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1043,7 +1147,11 @@ function ReviewControls({
           type="button"
           variant="destructive"
           className="w-full"
-          onClick={() => setSelectedAction("reject")}
+          onClick={() => {
+            setReturnTemplate("");
+            setReasonTag("OTHER");
+            setSelectedAction("reject");
+          }}
           disabled={submitting}
         >
           <XCircle className="mr-2 h-4 w-4" />
@@ -1067,6 +1175,17 @@ function ReviewControls({
                 <input type="hidden" name="requestId" value={request.id} />
                 <input type="hidden" name="stepId" value={step.id} />
                 <input type="hidden" name="action" value={selectedAction} />
+                <input type="hidden" name="reasonTag" value={reasonTag} />
+                {selectedAction === "approve" && (
+                  <div className="rounded-lg border bg-muted/40 p-3">
+                    <p className="text-sm font-semibold text-foreground">
+                      Handoff preview
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      After approval, this request goes to: {approveHandoffLabel}.
+                    </p>
+                  </div>
+                )}
                 {requiresDeanSelection && (
                   <div className="rounded-lg border bg-muted/40 p-3">
                     <div className="space-y-1">
@@ -1118,13 +1237,117 @@ function ReviewControls({
                     )}
                   </div>
                 )}
+                {selectedAction === "approve" && (
+                  <div className="rounded-lg border bg-muted/40 p-3">
+                    <p className="text-sm font-semibold text-foreground">
+                      Final reviewer checklist
+                    </p>
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Confirm these before approving.
+                    </p>
+                    <div className="space-y-2 text-sm">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={reviewChecklist.scheduleChecked}
+                          onChange={(event) =>
+                            setReviewChecklist((current) => ({
+                              ...current,
+                              scheduleChecked: event.target.checked,
+                            }))
+                          }
+                          className="h-4 w-4 accent-primary"
+                        />
+                        Schedule and times verified
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={reviewChecklist.supportChecked}
+                          onChange={(event) =>
+                            setReviewChecklist((current) => ({
+                              ...current,
+                              supportChecked: event.target.checked,
+                            }))
+                          }
+                          className="h-4 w-4 accent-primary"
+                        />
+                        Support requests reviewed
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={reviewChecklist.attachmentsChecked}
+                          onChange={(event) =>
+                            setReviewChecklist((current) => ({
+                              ...current,
+                              attachmentsChecked: event.target.checked,
+                            }))
+                          }
+                          className="h-4 w-4 accent-primary"
+                        />
+                        Attachments and remarks checked
+                      </label>
+                    </div>
+                  </div>
+                )}
+                {selectedAction === "return" && (
+                  <div className="rounded-lg border bg-muted/40 p-3">
+                    <Label htmlFor="return-template">Reason template</Label>
+                    <Select
+                      value={returnTemplate}
+                      onValueChange={(value) => setReturnTemplate(value)}
+                    >
+                      <SelectTrigger id="return-template" className="mt-2">
+                        <SelectValue placeholder="Pick quick return reason" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {returnTemplates.map((template) => (
+                          <SelectItem key={template} value={template}>
+                            {template}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Use template as opener, then add exact revision notes.
+                    </p>
+                  </div>
+                )}
+                {(selectedAction === "return" || selectedAction === "reject") && (
+                  <div className="space-y-2">
+                    <Label htmlFor="reason-tag">Decision reason tag</Label>
+                    <Select value={reasonTag} onValueChange={setReasonTag}>
+                      <SelectTrigger id="reason-tag">
+                        <SelectValue placeholder="Select reason tag" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="POLICY">Policy</SelectItem>
+                        <SelectItem value="SCHEDULE">Schedule</SelectItem>
+                        <SelectItem value="REQUIREMENTS">Requirements</SelectItem>
+                        <SelectItem value="SAFETY">Safety</SelectItem>
+                        <SelectItem value="BUDGET">Budget</SelectItem>
+                        <SelectItem value="OTHER">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div>
                   <Label>{selectedActionCommentLabel}</Label>
                   <Textarea
                     name="comment"
-                    placeholder={selectedActionPlaceholder}
+                    placeholder={
+                      selectedAction === "return" && returnTemplate
+                        ? `${returnTemplate}: add required revisions`
+                        : selectedActionPlaceholder
+                    }
                     required={selectedAction !== "approve"}
                     rows={4}
+                    defaultValue={
+                      selectedAction === "return" && returnTemplate
+                        ? `${returnTemplate}: `
+                        : ""
+                    }
                   />
                 </div>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -1141,7 +1364,7 @@ function ReviewControls({
                     disabled={
                       submitting ||
                       (selectedAction === "approve" &&
-                        attachmentLimitExceeded) ||
+                        (attachmentLimitExceeded || !approveChecklistComplete)) ||
                       missingDeanOptions
                     }
                     variant={

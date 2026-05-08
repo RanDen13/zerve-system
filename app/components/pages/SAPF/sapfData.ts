@@ -1,3 +1,5 @@
+import { normalizeSupportRequestLabel } from "./sapfEquipment";
+
 export const CORE_VALUE_OPTIONS = [
   "Courage",
   "Compassion",
@@ -30,7 +32,7 @@ export const SUPPORT_REQUEST_OPTIONS = [
   "Sound System",
   "Microphone",
   "LCD Projector",
-  "One Long Table",
+  "Tables",
   "Chairs",
 ];
 
@@ -104,7 +106,9 @@ function scheduleRows(request: any) {
 export function getSapfParts(request: any) {
   const coreValues = valuesFromRows(request.coreValues);
   const graduateAttributes = valuesFromRows(request.graduateAttributes);
-  const supportRequests = valuesFromRows(request.supportRequests);
+  const supportRequests = valuesFromRows(request.supportRequests).map(
+    normalizeSupportRequestLabel,
+  );
   const attachments = attachmentRows(request.attachments);
   const programFlowAttachments = attachments.filter(
     (attachment) => attachment.purpose === "PROGRAM_FLOW",

@@ -86,9 +86,9 @@ function formatSchedule(request: any) {
   return schedules
     .map(
       (schedule: any) =>
-        `${formatSapfDateForMessage(schedule.startAt)} · ${formatSapfTime(
+        `${formatSapfDateForMessage(schedule.startAt)} - ${formatSapfTime(
           schedule.startAt,
-        )} - ${formatSapfTime(schedule.endAt)}`,
+        )} to ${formatSapfTime(schedule.endAt)}`,
     )
     .join("<br />");
 }

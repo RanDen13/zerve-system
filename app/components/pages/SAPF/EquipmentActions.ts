@@ -10,6 +10,7 @@ import { v4 as uuid } from "uuid";
 import {
   EQUIPMENT_SUPPORT_FIELDS,
   EQUIPMENT_SUPPORT_LABELS,
+  normalizeSupportRequestLabel,
   parseEquipmentQuantity,
 } from "./sapfEquipment";
 import {
@@ -109,6 +110,58 @@ function userDisplayName(user: { name?: string | null; email?: string | null }) 
   return user.name || user.email || "A user";
 }
 
+function supportLabelLookupValues(label: string) {
+  const normalized = normalizeSupportRequestLabel(label);
+  return normalized === "Tables"
+    ? ["Tables", "One Long Table", "Long Table"]
+    : [normalized];
+}
+
+async function validateEquipmentItemUniqueness({
+  itemId,
+  name,
+  supportLabel,
+}: {
+  itemId?: string;
+  name: string;
+  supportLabel: string | null;
+}) {
+  const [nameMatch, supportLabelMatch] = await Promise.all([
+    (prisma as any).equipmentItem.findFirst({
+      where: {
+        name,
+        ...(itemId ? { id: { not: itemId } } : {}),
+      },
+      select: { id: true },
+    }),
+    supportLabel
+      ? (prisma as any).equipmentItem.findFirst({
+          where: {
+            supportLabel,
+            ...(itemId ? { id: { not: itemId } } : {}),
+          },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  if (nameMatch) {
+    return {
+      success: false,
+      message: "An equipment item with that name already exists.",
+    } satisfies ActionResult<void>;
+  }
+
+  if (supportLabelMatch) {
+    return {
+      success: false,
+      message: `${supportLabel} is already mapped to another equipment item.`,
+    } satisfies ActionResult<void>;
+  }
+
+  return null;
+}
+
 async function createNotification(
   userId: string,
   title: string,
@@ -159,7 +212,11 @@ async function logSapfActivity(
 }
 
 function sapfEquipmentSelections(sapf: any): SapfEquipmentSelection[] {
-  const selected = new Set<string>(sapf?.supportRequests || []);
+  const selected = new Set<string>(
+    (sapf?.supportRequests || []).map((value: string) =>
+      normalizeSupportRequestLabel(value),
+    ),
+  );
 
   return EQUIPMENT_SUPPORT_FIELDS.filter((field) =>
     selected.has(field.supportLabel),
@@ -298,11 +355,18 @@ export async function validateSapfEquipmentAvailability({
 
   const items = await (prisma as any).equipmentItem.findMany({
     where: {
-      supportLabel: { in: selections.map((item) => item.supportLabel) },
+      supportLabel: {
+        in: selections.flatMap((item) =>
+          supportLabelLookupValues(item.supportLabel),
+        ),
+      },
     },
   });
   const itemBySupport = new Map<string, any>(
-    items.map((item: any) => [item.supportLabel, item]),
+    items.map((item: any) => [
+      normalizeSupportRequestLabel(item.supportLabel || ""),
+      item,
+    ]),
   );
   const used = await usedQuantitiesByItem({
     itemIds: items.map((item: any) => item.id),
@@ -340,11 +404,18 @@ export async function replaceSapfEquipmentRequests(
   const supportLabels = selections.map((item) => item.supportLabel);
   const items = supportLabels.length
     ? await tx.equipmentItem.findMany({
-        where: { supportLabel: { in: supportLabels } },
+        where: {
+          supportLabel: {
+            in: supportLabels.flatMap((label) => supportLabelLookupValues(label)),
+          },
+        },
       })
     : [];
   const itemBySupport = new Map<string, any>(
-    items.map((item: any) => [item.supportLabel, item]),
+    items.map((item: any) => [
+      normalizeSupportRequestLabel(item.supportLabel || ""),
+      item,
+    ]),
   );
   const selectedItemIds = items.map((item: any) => item.id);
 
@@ -541,7 +612,14 @@ export async function createDefaultEquipmentItems(): Promise<ActionResult<void>>
     for (const field of EQUIPMENT_SUPPORT_FIELDS) {
       const existing = await (prisma as any).equipmentItem.findFirst({
         where: {
-          OR: [{ supportLabel: field.supportLabel }, { name: field.defaultName }],
+          OR: [
+            { supportLabel: field.supportLabel },
+            field.supportLabel === "Tables"
+              ? { supportLabel: "One Long Table" }
+              : undefined,
+            { name: field.defaultName },
+            field.supportLabel === "Tables" ? { name: "Long Table" } : undefined,
+          ].filter(Boolean) as any,
         },
       });
 
@@ -549,6 +627,7 @@ export async function createDefaultEquipmentItems(): Promise<ActionResult<void>>
         await (prisma as any).equipmentItem.update({
           where: { id: existing.id },
           data: {
+            name: field.defaultName,
             supportLabel: field.supportLabel,
             active: true,
           },
@@ -599,17 +678,25 @@ export async function saveEquipmentItem(
       10,
     );
     const active = data.get("active") !== "false";
+    const normalizedSupportLabel = normalizeSupportRequestLabel(supportLabelInput);
     const supportLabel =
       supportLabelInput &&
       supportLabelInput !== "NONE" &&
-      EQUIPMENT_SUPPORT_LABELS.includes(supportLabelInput as any)
-        ? supportLabelInput
+      EQUIPMENT_SUPPORT_LABELS.includes(normalizedSupportLabel as any)
+        ? normalizedSupportLabel
         : null;
 
     if (!name) return { success: false, message: "Equipment name is required." };
     if (!Number.isFinite(totalQuantity) || totalQuantity < 0) {
       return { success: false, message: "Quantity must be 0 or higher." };
     }
+
+    const uniquenessError = await validateEquipmentItemUniqueness({
+      itemId: itemId || undefined,
+      name,
+      supportLabel,
+    });
+    if (uniquenessError) return uniquenessError;
 
     if (itemId) {
       await (prisma as any).equipmentItem.update({
@@ -630,6 +717,7 @@ export async function saveEquipmentItem(
     }
 
     revalidatePath("/user/equipment");
+    revalidatePath("/user/dashboard");
     revalidatePath("/user/bookings/create");
     return { success: true, message: "Equipment saved." };
   } catch (error) {
@@ -663,6 +751,12 @@ export async function markEquipmentProvided(
     const pendingRows = rows.filter((row: any) => row.status === "REQUESTED");
     if (!pendingRows.length) {
       return { success: false, message: "No pending equipment to provide." };
+    }
+    if (request.status !== "APPROVED") {
+      return {
+        success: false,
+        message: "Equipment can only be released after the booking is fully approved.",
+      };
     }
 
     await prisma.$transaction(async (tx) => {
@@ -707,6 +801,7 @@ export async function markEquipmentProvided(
     }
 
     revalidatePath("/user/equipment");
+    revalidatePath("/user/dashboard");
     revalidatePath(`/user/bookings/${request.id}`);
     return { success: true, message: "Equipment marked as provided." };
   } catch (error) {
@@ -784,6 +879,7 @@ export async function requestEquipmentReturn(
 
     await notifyProvisionersForEquipmentReturn(request.id);
     revalidatePath(`/user/bookings/${request.id}`);
+    revalidatePath("/user/dashboard");
     revalidatePath("/user/equipment");
     return { success: true, message: "Equipment return requested." };
   } catch (error) {
@@ -858,6 +954,7 @@ export async function confirmEquipmentReturned(
       });
     }
     revalidatePath("/user/equipment");
+    revalidatePath("/user/dashboard");
     revalidatePath(`/user/bookings/${request.id}`);
     return { success: true, message: "Equipment returned to inventory." };
   } catch (error) {
