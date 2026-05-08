@@ -59,6 +59,37 @@ async function assignApproverPosition(
   });
 }
 
+async function upsertAmenity({
+  id,
+  name,
+  icon,
+  supportLabel,
+}: {
+  id: string;
+  name: string;
+  icon: string;
+  supportLabel: string | null;
+}) {
+  const existing = await prisma.amenity.findFirst({
+    where: supportLabel
+      ? {
+          OR: [{ id }, { supportLabel }],
+        }
+      : { id },
+  });
+
+  if (existing) {
+    return prisma.amenity.update({
+      where: { id: existing.id },
+      data: { name, icon, supportLabel, active: true },
+    });
+  }
+
+  return prisma.amenity.create({
+    data: { id, name, icon, supportLabel, active: true },
+  });
+}
+
 async function main() {
   console.log("Seeding officer-only SAPF reservation system...");
 
@@ -196,13 +227,7 @@ async function main() {
         icon: "microphone",
         supportLabel: "Microphone",
       },
-    ].map(({ id, name, icon, supportLabel }) =>
-      prisma.amenity.upsert({
-        where: { id },
-        update: { name, icon, supportLabel: supportLabel || undefined, active: true },
-        create: { id, name, icon, supportLabel: supportLabel || undefined, active: true },
-      }),
-    ),
+    ].map(upsertAmenity),
   );
 
   const [wifi, projector, sound, stage, air, tables, chairs] = amenities;
