@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "concurrently \"next dev\" \"npx prisma studio --browser none\"",
     "prisma:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts",
     "db:migrate:sqlite-to-postgres": "tsx scripts/migrate-sqlite-to-postgres.ts",
-    "build": "pnpm prisma:generate && pnpm prisma migrate deploy && next build",
+    "build": "pnpm prisma:generate && pnpm prisma migrate deploy && pnpm db:seed && next build",
     "start": "next start",
     "lint": "eslint"
   },

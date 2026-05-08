@@ -26,11 +26,15 @@ import {
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import {
+  CalendarClock,
+  CheckCircle2,
   FileDown,
   History,
   Loader2,
+  PackageCheck,
   PencilLine,
   RefreshCcw,
+  RotateCcw,
   ShieldCheck,
   XCircle,
 } from "lucide-react";
@@ -60,6 +64,36 @@ function currentWorkflowStep(request: any) {
     request.approvalSteps?.find((step: any) => step.status === "RETURNED") ||
     null
   );
+}
+
+function firstScheduleStart(request: any) {
+  const schedules = Array.isArray(request?.schedules) ? request.schedules : [];
+  const first = schedules[0]?.startAt;
+  return first ? new Date(first) : null;
+}
+
+function lastScheduleEnd(request: any) {
+  const schedules = Array.isArray(request?.schedules) ? request.schedules : [];
+  const last = schedules[schedules.length - 1]?.endAt;
+  return last ? new Date(last) : null;
+}
+
+function isReleaseWindowOpen(request: any) {
+  const start = firstScheduleStart(request);
+  if (!start) return false;
+  const releaseWindow = new Date(start.getTime() - 3 * 24 * 60 * 60 * 1000);
+  return new Date() >= releaseWindow;
+}
+
+function hasEventEnded(request: any) {
+  const end = lastScheduleEnd(request);
+  return Boolean(end && new Date() >= end);
+}
+
+function lifecycleStepClass(active: boolean, done: boolean) {
+  if (done) return "border-emerald-500/30 bg-emerald-500/10";
+  if (active) return "border-sky-500/30 bg-sky-500/10";
+  return "border-border bg-background";
 }
 
 export default function SapfBookingDetailPage({
@@ -156,7 +190,29 @@ export default function SapfBookingDetailPage({
   const canRequestEquipmentReturn =
     me?.role === "OFFICER" &&
     request.status === "APPROVED" &&
-    request.equipmentRequests?.some((item: any) => item.status === "PROVIDED");
+    request.equipmentRequests?.some((item: any) => item.status === "PROVIDED") &&
+    hasEventEnded(request);
+  const equipmentRequests = Array.isArray(request.equipmentRequests)
+    ? request.equipmentRequests
+    : [];
+  const hasEquipment = equipmentRequests.length > 0;
+  const hasPendingEquipment = equipmentRequests.some(
+    (item: any) => item.status === "REQUESTED",
+  );
+  const hasProvidedEquipment = equipmentRequests.some(
+    (item: any) => item.status === "PROVIDED",
+  );
+  const hasReturnRequestedEquipment = equipmentRequests.some(
+    (item: any) => item.status === "RETURN_REQUESTED",
+  );
+  const allEquipmentReturned =
+    hasEquipment &&
+    equipmentRequests.every((item: any) => item.status === "RETURNED");
+  const eventEnded = hasEventEnded(request);
+  const releaseWindowOpen = isReleaseWindowOpen(request);
+  const operationallyComplete =
+    request.status === "APPROVED" &&
+    (hasEquipment ? allEquipmentReturned : eventEnded);
   const activeStep = currentWorkflowStep(request);
   const officerActionSummary = canEdit
     ? "You can still edit directly."
@@ -165,7 +221,9 @@ export default function SapfBookingDetailPage({
       : request.status === "RETURNED_FOR_REVISION"
         ? "Revise request, then resubmit."
         : request.status === "APPROVED"
-          ? "Request approved. Monitor event completion or equipment return."
+          ? operationallyComplete
+            ? "Operationally complete."
+            : "Approved. Wait for event and equipment completion."
           : request.status === "REJECTED"
             ? "Request closed after rejection."
             : request.status === "CANCELLED"
@@ -302,6 +360,15 @@ export default function SapfBookingDetailPage({
               {requestingReturn ? "Sending..." : "Event Done"}
             </Button>
           )}
+          {me?.role === "OFFICER" &&
+            request.status === "APPROVED" &&
+            hasProvidedEquipment &&
+            !eventEnded && (
+              <Button type="button" variant="outline" disabled>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Return After Event
+              </Button>
+            )}
           <Button asChild variant="outline">
             <a
               href={`/api/sapf/${request.id}/preview`}
@@ -401,6 +468,94 @@ export default function SapfBookingDetailPage({
           </div>
         </CardContent>
       </Card>
+
+      {request.status === "APPROVED" && (
+        <Card className="overflow-hidden border-sky-500/20">
+          <CardHeader className="bg-sky-500/10">
+            <CardTitle className="flex items-center gap-2">
+              <CalendarClock className="h-5 w-5" />
+              Post-Approval Lifecycle
+            </CardTitle>
+            <CardDescription>
+              Approval authorizes the reservation. The booking is operationally
+              complete only after the event window and equipment return are done.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 pt-4 md:grid-cols-4">
+            <div className={lifecycleStepClass(false, true) + " rounded-lg border p-4"}>
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              <p className="mt-3 font-semibold">Approved</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The request is authorized and visible as approved/booked.
+              </p>
+            </div>
+            <div
+              className={
+                lifecycleStepClass(
+                  !eventEnded && (!hasEquipment || hasPendingEquipment),
+                  eventEnded,
+                ) + " rounded-lg border p-4"
+              }
+            >
+              <CalendarClock className="h-5 w-5 text-sky-600" />
+              <p className="mt-3 font-semibold">
+                {eventEnded ? "Event Window Done" : "Waiting for Event"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {releaseWindowOpen
+                  ? "Event is inside the equipment release window."
+                  : "Equipment release opens 3 days before the event."}
+              </p>
+            </div>
+            <div
+              className={
+                lifecycleStepClass(
+                  hasEquipment && (hasPendingEquipment || hasProvidedEquipment),
+                  !hasEquipment || hasProvidedEquipment || allEquipmentReturned,
+                ) + " rounded-lg border p-4"
+              }
+            >
+              <PackageCheck className="h-5 w-5 text-indigo-600" />
+              <p className="mt-3 font-semibold">Equipment Provision</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {!hasEquipment
+                  ? "No borrowed equipment requested."
+                  : hasPendingEquipment
+                    ? "Provisioner releases equipment during the release window."
+                    : hasProvidedEquipment
+                      ? "Equipment is currently with the officer/event."
+                      : "Equipment was handled."}
+              </p>
+            </div>
+            <div
+              className={
+                lifecycleStepClass(
+                  hasReturnRequestedEquipment || hasProvidedEquipment,
+                  operationallyComplete,
+                ) + " rounded-lg border p-4"
+              }
+            >
+              <RotateCcw className="h-5 w-5 text-emerald-600" />
+              <p className="mt-3 font-semibold">
+                {operationallyComplete ? "Officially Complete" : "Return / Close"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {!hasEquipment
+                  ? eventEnded
+                    ? "Event is complete. No equipment return needed."
+                    : "Completion happens after the event ends."
+                  : allEquipmentReturned
+                    ? "Provisioner confirmed equipment returned."
+                    : hasReturnRequestedEquipment
+                      ? "Waiting for provisioner return confirmation."
+                      : hasProvidedEquipment
+                        ? "Officer returns equipment after the event ends."
+                        : "Waiting for equipment to be provided first."}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="details" className="space-y-4">
         <TabsList

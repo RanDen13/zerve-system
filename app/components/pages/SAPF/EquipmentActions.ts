@@ -99,6 +99,30 @@ function formatSchedule(request: any) {
     .join(", ");
 }
 
+function firstScheduleStart(request: any) {
+  const schedules = Array.isArray(request?.schedules) ? request.schedules : [];
+  const first = schedules[0]?.startAt;
+  return first ? new Date(first) : null;
+}
+
+function lastScheduleEnd(request: any) {
+  const schedules = Array.isArray(request?.schedules) ? request.schedules : [];
+  const last = schedules[schedules.length - 1]?.endAt;
+  return last ? new Date(last) : null;
+}
+
+function canReleaseEquipmentNow(request: any, now = new Date()) {
+  const start = firstScheduleStart(request);
+  if (!start) return false;
+  const releaseWindowStart = new Date(start.getTime() - 3 * 24 * 60 * 60 * 1000);
+  return now >= releaseWindowStart;
+}
+
+function hasEventEnded(request: any, now = new Date()) {
+  const end = lastScheduleEnd(request);
+  return Boolean(end && now >= end);
+}
+
 function equipmentSummary(rows: any[]) {
   if (!rows.length) return "No equipment";
   return rows
@@ -758,6 +782,13 @@ export async function markEquipmentProvided(
         message: "Equipment can only be released after the booking is fully approved.",
       };
     }
+    if (!canReleaseEquipmentNow(request)) {
+      return {
+        success: false,
+        message:
+          "Equipment can be released starting 3 days before the event schedule.",
+      };
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.sAPFEquipmentRequest.updateMany({
@@ -851,6 +882,12 @@ export async function requestEquipmentReturn(
       return {
         success: false,
         message: "No provided equipment is ready for return.",
+      };
+    }
+    if (!hasEventEnded(request)) {
+      return {
+        success: false,
+        message: "Equipment return can only be requested after the event ends.",
       };
     }
 

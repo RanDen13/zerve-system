@@ -1,3 +1,4 @@
+import "dotenv/config";
 import {
   provisionCredentialAccount,
   type ManagedRole,
@@ -68,6 +69,38 @@ async function main() {
     "SUPER_ADMIN",
   );
 
+  const mockSds = await createAccount(
+    "mock.sds@email.lcup.edu.ph",
+    "SDS_Mock123",
+    "Mock SDS Admin",
+    "ADMIN",
+    "Student Discipline and Services Admin",
+  );
+
+  const mockAdviser = await createAccount(
+    "mock.adviser@email.lcup.edu.ph",
+    "Adviser123",
+    "Mock Adviser",
+    "APPROVER",
+    "Organization Adviser",
+  );
+
+  const mockDean = await createAccount(
+    "mock.dean@email.lcup.edu.ph",
+    "Dean123",
+    "Mock Dean",
+    "APPROVER",
+    "College Dean",
+  );
+
+  await createAccount(
+    "mock.officer@email.lcup.edu.ph",
+    "Officer123",
+    "Mock Officer",
+    "OFFICER",
+    "Student Organization Officer",
+  );
+
   const seededApprovers = await Promise.all([
     createAccount(
       "mock.sas@email.lcup.edu.ph",
@@ -121,6 +154,9 @@ async function main() {
   ]);
 
   await Promise.all([
+    assignApproverPosition(mockSds.id, "SDS"),
+    assignApproverPosition(mockAdviser.id, "ADVISER"),
+    assignApproverPosition(mockDean.id, "DEAN"),
     assignApproverPosition(seededApprovers[0].id, "SAS"),
     assignApproverPosition(seededApprovers[1].id, "VPAA_ASSISTANT"),
     assignApproverPosition(seededApprovers[2].id, "VPAA"),
@@ -234,9 +270,23 @@ async function main() {
     },
   });
 
-  await prisma.venueBlock.create({
-    data: {
-      id: uuid(),
+  await prisma.venueBlock.upsert({
+    where: { id: "block-foundation-week-2026" },
+    update: {
+      title: "University Foundation Week",
+      reason: "University event",
+      createdById: superAdmin.id,
+      schedules: {
+        deleteMany: {},
+        create: {
+          id: uuid(),
+          startAt: new Date("2026-06-20T00:00:00.000Z"),
+          endAt: new Date("2026-06-20T10:00:00.000Z"),
+        },
+      },
+    },
+    create: {
+      id: "block-foundation-week-2026",
       title: "University Foundation Week",
       reason: "University event",
       createdById: superAdmin.id,
@@ -255,6 +305,9 @@ async function main() {
     "Super admin: ryanphilippeiori.cu@email.lcup.edu.ph / Super_Admin123",
   );
   console.log("Mock approver accounts:");
+  console.log("SDS/Admin: mock.sds@email.lcup.edu.ph / SDS_Mock123");
+  console.log("Adviser: mock.adviser@email.lcup.edu.ph / Adviser123");
+  console.log("Dean: mock.dean@email.lcup.edu.ph / Dean123");
   console.log("SAS: mock.sas@email.lcup.edu.ph / SAS_Mock123");
   console.log("VPAA Assistant: mock.vpaa.asst@email.lcup.edu.ph / VPAA_Asst123");
   console.log("VPAA: mock.vpaa@email.lcup.edu.ph / VPAA_Mock123");
@@ -268,6 +321,8 @@ async function main() {
   console.log(
     "Additional Signatory 3: mock.vp.spiritual@email.lcup.edu.ph / VPSpiritual123",
   );
+  console.log("Mock officer account:");
+  console.log("Officer: mock.officer@email.lcup.edu.ph / Officer123");
 }
 
 main()

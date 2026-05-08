@@ -112,6 +112,14 @@ function dueSoon(request: any) {
   return isWithinInterval(start, { start: now, end: threeDays });
 }
 
+function canReleaseEquipment(request: any) {
+  const start = firstStart(request);
+  if (!start) return false;
+  const now = new Date();
+  const releaseWindow = new Date(start.getTime() - 3 * 24 * 60 * 60 * 1000);
+  return now >= releaseWindow;
+}
+
 function statusClass(status: string) {
   if (status === "PROVIDED")
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -538,7 +546,9 @@ export default function EquipmentProvisioningPage() {
                   (row) => row.status === "RETURN_REQUESTED",
                 );
                 const canProvide =
-                  hasRequested && group.request.status === "APPROVED";
+                  hasRequested &&
+                  group.request.status === "APPROVED" &&
+                  canReleaseEquipment(group.request);
                 const firstDate = firstStart(group.request);
 
                 return (
@@ -599,7 +609,9 @@ export default function EquipmentProvisioningPage() {
                             title={
                               canProvide
                                 ? "Mark equipment provided"
-                                : "Available after full approval"
+                                : group.request.status !== "APPROVED"
+                                  ? "Available after full approval"
+                                  : "Available starting 3 days before the event"
                             }
                           >
                             {actionId === `provide:${group.request.id}` ? (
@@ -607,7 +619,11 @@ export default function EquipmentProvisioningPage() {
                             ) : (
                               <PackageCheck className="mr-2 h-4 w-4" />
                             )}
-                            {canProvide ? "Mark Provided" : "Waiting approval"}
+                            {canProvide
+                              ? "Mark Provided"
+                              : group.request.status === "APPROVED"
+                                ? "Not time yet"
+                                : "Waiting approval"}
                           </Button>
                         )}
                         {hasReturnRequested && (

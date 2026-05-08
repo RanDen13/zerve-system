@@ -106,41 +106,72 @@ const approvalChain = [
     title: "Officer",
     detail: "Creates request, fills details, submits for review.",
     tag: "Required",
+    accent: "from-sky-400 to-cyan-300",
+    chip: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   },
   {
     title: "Adviser",
     detail: "First approver check before routing forward.",
     tag: "Required",
+    accent: "from-emerald-400 to-teal-300",
+    chip: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   {
     title: "Dean",
     detail: "Selected during flow when dean approval is required.",
     tag: "Conditional",
+    accent: "from-blue-400 to-indigo-300",
+    chip: "bg-blue-500/15 text-blue-700 dark:text-blue-200",
   },
   {
     title: "SDS / Admin",
     detail: "Core clearance gate and SDS-controlled decisions.",
     tag: "Required",
+    accent: "from-amber-400 to-orange-300",
+    chip: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
   {
     title: "SAS",
     detail: "Student affairs validation in approval sequence.",
     tag: "Required",
+    accent: "from-cyan-400 to-blue-300",
+    chip: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-200",
   },
   {
     title: "Additional Signatories",
-    detail: "Extra approvers inserted based on request needs.",
+    detail:
+      "Optional extra reviewers such as VP Finance when budget support is requested.",
     tag: "Optional",
+    accent: "from-fuchsia-400 to-rose-300",
+    chip: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-200",
   },
   {
-    title: "VP Finance",
-    detail: "Shown only when budget support is requested.",
-    tag: "Optional with budget",
+    title: "VPAA Assistant",
+    detail: "Academic affairs assistant prepares the request for VPAA review.",
+    tag: "Required",
+    accent: "from-violet-400 to-indigo-300",
+    chip: "bg-violet-500/15 text-violet-700 dark:text-violet-200",
+  },
+  {
+    title: "VPAA",
+    detail: "Vice President for Academic Affairs gives final academic review.",
+    tag: "Required",
+    accent: "from-indigo-400 to-blue-300",
+    chip: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
+  },
+  {
+    title: "University President",
+    detail: "Final executive approval before the request moves to completion.",
+    tag: "Final approver",
+    accent: "from-yellow-300 to-amber-400",
+    chip: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-200",
   },
   {
     title: "Completed Request",
     detail: "Cleared request with full activity and decision history.",
     tag: "Outcome",
+    accent: "from-lime-300 to-emerald-400",
+    chip: "bg-lime-500/15 text-lime-700 dark:text-lime-200",
   },
 ];
 
@@ -352,8 +383,13 @@ export default function Home() {
         </motion.div>
       </section>
 
-      <section id="approval-chain" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+      <section
+        id="approval-chain"
+        className="relative overflow-hidden px-4 py-20 sm:px-6 lg:px-8"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(14,165,233,0.16),transparent_30%),radial-gradient(circle_at_85%_10%,rgba(16,185,129,0.14),transparent_28%),linear-gradient(180deg,transparent,rgba(15,23,42,0.04),transparent)]" />
         <motion.div
+          className="relative mx-auto max-w-7xl"
           initial={{ opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -361,12 +397,16 @@ export default function Home() {
         >
           <div className="flex items-end justify-between gap-4">
             <div>
-              <h3 className="text-2xl font-bold sm:text-3xl">
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.28em] text-sky-700 dark:text-sky-300">
+                Approval Map
+              </p>
+              <h3 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
                 Full approval chain
               </h3>
               <p className="mt-3 max-w-3xl text-muted-foreground">
                 Swipe on touch devices or use arrows to view full sequence:
-                officer, adviser, dean, SDS, SAS, and optional signatories.
+                officer, adviser, dean, SDS, SAS, optional signatories, VPAA
+                Assistant, VPAA, and University President.
               </p>
             </div>
             <div className="hidden items-center gap-2 md:flex">
@@ -392,29 +432,41 @@ export default function Home() {
           </div>
           <div
             ref={approvalScrollerRef}
-            className="mt-8 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 [scrollbar-width:thin]"
+            className="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-color:rgba(14,165,233,0.55)_transparent] [scrollbar-width:thin]"
           >
             {approvalChain.map((item, index) => (
               <div
                 key={item.title}
-                className="min-w-[260px] snap-start rounded-md border bg-card p-4 shadow-sm md:min-w-[280px]"
+                className="group relative min-w-[270px] snap-start overflow-hidden rounded-2xl border bg-card/85 p-5 shadow-sm backdrop-blur transition hover:-translate-y-1 hover:shadow-xl md:min-w-[300px]"
               >
+                <div
+                  className={`absolute inset-x-0 top-0 h-1.5 bg-linear-to-r ${item.accent}`}
+                />
+                <div
+                  className={`mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-linear-to-br ${item.accent} text-sm font-black text-slate-950 shadow-lg shadow-black/10`}
+                >
+                  {index + 1}
+                </div>
                 <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
                   Stage {index + 1}
                 </p>
-                <p className="mt-2 text-lg font-semibold">{item.title}</p>
+                <p className="mt-2 text-xl font-bold">{item.title}</p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {item.detail}
                 </p>
-                <span className="mt-3 inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                <span
+                  className={`mt-4 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${item.chip}`}
+                >
                   {item.tag}
                 </span>
               </div>
             ))}
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            If any approver returns request, officer revises then resubmits to continue chain.
-          </p>
+          <div className="mt-4 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4 text-sm text-muted-foreground">
+            VP Finance is not a separate fixed stage. It appears inside
+            Additional Signatories only when budget support is requested, and
+            the officer can still remove it before submission.
+          </div>
         </motion.div>
       </section>
 
