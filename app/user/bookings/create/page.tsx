@@ -153,7 +153,7 @@ const page = async ({
       {request?.status === "RETURNED_FOR_REVISION" && (
         <Callout tone="warning" title={`Editing returned request #${request.requestNumber}`}>
           Editing returned request #{request.requestNumber}. Update the details
-          and resubmit to continue the approval flo.
+          and resubmit to continue the approval flow.
         </Callout>
       )}
       <Callout tone="warning" title="Conflict rules">
