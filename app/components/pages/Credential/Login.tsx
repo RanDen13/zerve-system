@@ -28,7 +28,10 @@ const containerVariants = {
 
 const magicCodeLength = 10;
 const magicCodeGroupSize = 5;
-const recaptchaSiteKey = env("NEXT_PUBLIC_RECAPTCHA_SITE_KEY")?.trim();
+const captchaEnabled = env("NEXT_PUBLIC_CAPTCHA_ENABLED") !== "false";
+const recaptchaSiteKey = captchaEnabled
+  ? env("NEXT_PUBLIC_RECAPTCHA_SITE_KEY")?.trim()
+  : "";
 
 declare global {
   interface Window {
