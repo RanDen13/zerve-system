@@ -7,7 +7,7 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations_postgres",
-    seed: "tsx prisma/seed.ts",
+    seed: "tsx prisma/seed.ts --allow-demo-seed",
   },
   datasource: {
     url: process.env.DIRECT_URL || env("DATABASE_URL"),

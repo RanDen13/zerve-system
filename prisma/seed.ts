@@ -6,6 +6,14 @@ import {
 import { prisma } from "@/lib/prisma";
 import { v4 as uuid } from "uuid";
 
+const allowDemoSeed = process.argv.includes("--allow-demo-seed");
+
+if (!allowDemoSeed) {
+  throw new Error(
+    "Demo seed creates known local accounts. Re-run with --allow-demo-seed only for local/demo databases.",
+  );
+}
+
 type ApproverPositionValue =
   | "ADVISER"
   | "DEAN"
