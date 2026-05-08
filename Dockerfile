@@ -32,6 +32,9 @@ RUN pnpm run build
 FROM base AS runner
 
 ENV NODE_ENV=production
+ENV PG_POOL_MAX=1
+ENV PG_POOL_IDLE_TIMEOUT_MS=10000
+ENV PG_POOL_CONNECTION_TIMEOUT_MS=10000
 
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
