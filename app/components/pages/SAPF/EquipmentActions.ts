@@ -14,6 +14,10 @@ import {
   parseEquipmentQuantity,
 } from "./sapfEquipment";
 import {
+  syncSapfOperationalStatusById,
+  syncSapfOperationalStatuses,
+} from "./SapfOperationalActions";
+import {
   formatSapfDateForMessage,
   formatSapfTime,
 } from "./sapfSchedule";
@@ -687,6 +691,7 @@ export async function getEquipmentWorkspace(): Promise<ActionResult<any>> {
     }
 
     try {
+      await syncSapfOperationalStatuses();
       await sendEquipmentDueReminders();
     } catch (error) {
       console.error("Equipment reminder check failed:", error);
@@ -937,6 +942,7 @@ export async function markEquipmentProvided(
         },
       });
     });
+    await syncSapfOperationalStatusById(request.id);
 
     await createNotification(
       request.officerId,
@@ -1038,6 +1044,7 @@ export async function requestEquipmentReturn(
       });
     });
 
+    await syncSapfOperationalStatusById(request.id);
     await notifyProvisionersForEquipmentReturn(request.id);
     revalidatePath(`/user/bookings/${request.id}`);
     revalidatePath("/user/dashboard");
@@ -1098,6 +1105,7 @@ export async function confirmEquipmentReturned(
       });
     });
 
+    await syncSapfOperationalStatusById(request.id);
     await createNotification(
       request.officerId,
       "Equipment returned",

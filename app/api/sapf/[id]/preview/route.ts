@@ -23,7 +23,13 @@ export async function GET(
   }
 
   const role = session.user.role?.toUpperCase();
-  const allowedRoles = ["OFFICER", "APPROVER", "ADMIN", "SUPER_ADMIN"];
+  const allowedRoles = [
+    "OFFICER",
+    "APPROVER",
+    "ADMIN",
+    "SUPER_ADMIN",
+    "EQUIPMENT_PROVISIONER",
+  ];
   if (!role || !allowedRoles.includes(role)) {
     return NextResponse.json(
       { message: "Your account role is not valid." },
@@ -32,11 +38,13 @@ export async function GET(
   }
 
   const { id } = await params;
-  const requestWhere =
-    role === "SUPER_ADMIN"
-      ? { id }
-      : role === "OFFICER"
-        ? { id, officerId: session.user.id }
+  const canSeeAllRequests = ["ADMIN", "SUPER_ADMIN"].includes(role);
+  const requestWhere = canSeeAllRequests
+    ? { id }
+    : role === "OFFICER"
+      ? { id, officerId: session.user.id }
+      : role === "EQUIPMENT_PROVISIONER"
+        ? { id, equipmentRequests: { some: {} } }
         : {
             id,
             OR: [

@@ -1,6 +1,11 @@
 "use client";
 
-import { ErrorStateCard, PageHeader, PageShell } from "@/app/components/UX";
+import {
+  ErrorStateCard,
+  PageHeader,
+  PageShell,
+  StatusBadge,
+} from "@/app/components/UX";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
@@ -50,6 +55,10 @@ import {
   equipmentStatusLabel,
 } from "./sapfEquipment";
 import { formatSapfDate, formatSapfTime } from "./sapfSchedule";
+import {
+  deriveSapfOperationalStatus,
+  operationalStatusLabel,
+} from "./sapfLifecycle";
 import SapfPageLoading from "./SapfPageLoading";
 import Link from "next/link";
 
@@ -550,6 +559,9 @@ export default function EquipmentProvisioningPage() {
                   group.request.status === "APPROVED" &&
                   canReleaseEquipment(group.request);
                 const firstDate = firstStart(group.request);
+                const operationalStatus = deriveSapfOperationalStatus(
+                  group.request,
+                );
 
                 return (
                   <div
@@ -572,6 +584,12 @@ export default function EquipmentProvisioningPage() {
                           <Badge variant="outline">
                             {queueTabs.find((item) => item.id === bucket)?.label}
                           </Badge>
+                          {group.request.status === "APPROVED" && (
+                            <StatusBadge
+                              status={operationalStatus}
+                              label={operationalStatusLabel(operationalStatus)}
+                            />
+                          )}
                           {dueSoon(group.request) && bucket === "ready" && (
                             <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
                               Due soon

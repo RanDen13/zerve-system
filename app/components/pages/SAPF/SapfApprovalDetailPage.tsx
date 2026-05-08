@@ -61,14 +61,14 @@ function currentWorkflowStep(request: any) {
 function stepDueLabel(step: any) {
   if (!step) return "No active deadline";
   const timeoutByPosition: Record<string, number> = {
-    ADVISER: 2,
-    DEAN: 2,
+    ADVISER: 3,
+    DEAN: 3,
     SDS: 3,
-    SAS: 2,
-    VPAA_ASSISTANT: 2,
-    VPAA: 2,
-    UNIVERSITY_PRESIDENT: 3,
-    ADDITIONAL_SIGNATORY: 2,
+    SAS: 3,
+    VPAA_ASSISTANT: 3,
+    VPAA: 3,
+    UNIVERSITY_PRESIDENT: 10,
+    ADDITIONAL_SIGNATORY: 3,
   };
   const timeoutDays =
     timeoutByPosition[String(step.position || "").toUpperCase()] ?? 3;

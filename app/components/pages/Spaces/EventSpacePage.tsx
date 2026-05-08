@@ -23,6 +23,10 @@ import { ArrowLeft, Calendar, CheckCircle, MapPin, Send, Users } from "lucide-re
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import {
+  deriveSapfOperationalStatus,
+  operationalStatusLabel,
+} from "../SAPF/sapfLifecycle";
 import { getEventSpaceById } from "./EventSpaceActions";
 import EventSpaceSkeleton from "./EventSpaceSkeleton";
 import { EventSpaceData } from "./schema";
@@ -87,6 +91,9 @@ const EventSpacePage = ({
           subtitle: [
             request.setting === "Off-Campus" ? "Off-campus" : null,
             request.organization,
+            request.status === "APPROVED"
+              ? operationalStatusLabel(deriveSapfOperationalStatus(request))
+              : null,
           ]
             .filter(Boolean)
             .join(" - "),
@@ -96,6 +103,10 @@ const EventSpacePage = ({
             request.status === "APPROVED"
               ? ("BOOKED" as const)
               : ("PENDING" as const),
+          operationalStatus:
+            request.status === "APPROVED"
+              ? deriveSapfOperationalStatus(request)
+              : null,
           scope:
             request.setting === "Off-Campus"
               ? ("OFF_CAMPUS" as const)

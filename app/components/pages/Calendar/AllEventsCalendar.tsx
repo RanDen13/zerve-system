@@ -3,6 +3,10 @@
 import VenueMonthCalendar, {
   VenueCalendarItem,
 } from "@/app/components/pages/Calendar/VenueMonthCalendar";
+import {
+  deriveSapfOperationalStatus,
+  operationalStatusLabel,
+} from "@/app/components/pages/SAPF/sapfLifecycle";
 import { formatSapfDateInputValue } from "@/app/components/pages/SAPF/sapfSchedule";
 import { useMemo } from "react";
 
@@ -11,7 +15,9 @@ function requestSubtitle(request: any) {
     request.setting === "Off-Campus" ? "Off-campus" : null,
     request.organization,
     request.department,
-    request.status?.replaceAll("_", " "),
+    request.status === "APPROVED"
+      ? operationalStatusLabel(deriveSapfOperationalStatus(request))
+      : request.status?.replaceAll("_", " "),
   ]
     .filter(Boolean)
     .join(" - ");
@@ -78,6 +84,10 @@ export default function AllEventsCalendar({
               request.status === "APPROVED"
                 ? ("BOOKED" as const)
                 : ("PENDING" as const),
+            operationalStatus:
+              request.status === "APPROVED"
+                ? deriveSapfOperationalStatus(request)
+                : null,
             scope:
               request.setting === "Off-Campus"
                 ? ("OFF_CAMPUS" as const)

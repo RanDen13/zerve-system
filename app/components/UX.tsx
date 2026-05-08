@@ -61,6 +61,7 @@ export function statusTone(status?: string | null): Tone {
       "PROVIDED",
       "RETURNED",
       "COMPLETED",
+      "EQUIPMENT_PROVIDED",
       "SUCCESS",
     ].includes(value)
   ) {
@@ -85,6 +86,10 @@ export function statusTone(status?: string | null): Tone {
       "IN_REVIEW",
       "REQUESTED",
       "READY",
+      "WAITING_FOR_EVENT",
+      "EQUIPMENT_PENDING",
+      "ONGOING",
+      "AWAITING_EQUIPMENT_RETURN",
       "RETURN_REQUESTED",
     ].includes(value)
   ) {

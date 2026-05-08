@@ -1,6 +1,12 @@
 "use client";
 
-import { ErrorStateCard, PageHeader, PageShell, StatCard } from "@/app/components/UX";
+import {
+  ErrorStateCard,
+  PageHeader,
+  PageShell,
+  StatCard,
+  StatusBadge,
+} from "@/app/components/UX";
 import { usePopup } from "@/app/components/Popup/PopupProvider";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -22,6 +28,10 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getEquipmentWorkspace } from "./EquipmentActions";
+import {
+  deriveSapfOperationalStatus,
+  operationalStatusLabel,
+} from "./sapfLifecycle";
 import SapfPageLoading from "./SapfPageLoading";
 
 function firstStart(request: any) {
@@ -266,6 +276,9 @@ export default function EquipmentDashboard() {
               spotlight.map((group) => {
                 const start = firstStart(group.request);
                 const bucket = queueBucket(group);
+                const operationalStatus = deriveSapfOperationalStatus(
+                  group.request,
+                );
                 return (
                   <div
                     key={group.request.id}
@@ -288,9 +301,17 @@ export default function EquipmentDashboard() {
                             : "No schedule yet"}
                         </p>
                       </div>
-                      <span className="rounded-full border px-2 py-1 text-xs font-medium capitalize text-muted-foreground">
-                        {bucket}
-                      </span>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <span className="rounded-full border px-2 py-1 text-xs font-medium capitalize text-muted-foreground">
+                          {bucket}
+                        </span>
+                        {group.request.status === "APPROVED" && (
+                          <StatusBadge
+                            status={operationalStatus}
+                            label={operationalStatusLabel(operationalStatus)}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

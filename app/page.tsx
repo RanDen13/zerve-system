@@ -184,12 +184,12 @@ export default function Home() {
   const approvalScrollerRef = useRef<HTMLDivElement | null>(null);
   const rolePaths = [
     {
-      role: "Officer",
+      role: "User",
       description: "Create and submit requests",
       href: isLoggedIn ? "/user/bookings/create" : "/login",
     },
     {
-      role: "Approver",
+      role: "Faculty",
       description: "Review assigned requests",
       href: isLoggedIn ? "/user/bookings" : "/login",
     },
@@ -207,7 +207,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background font-serif text-foreground">
       <section className="relative flex min-h-[92vh] items-center overflow-hidden px-4 py-20 sm:px-6 lg:px-20">
         <Image
           src="/lcupBg.png"
@@ -238,27 +238,27 @@ export default function Home() {
           >
             <motion.p
               variants={fadeInUp}
-              className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-normal text-emerald-200 backdrop-blur"
+              className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200 backdrop-blur"
             >
               <AppLogo className="h-4 w-4 shrink-0" variant="light" />
               <span>Zerve</span>
             </motion.p>
             <motion.h1
               variants={fadeInUp}
-              className="text-4xl font-extrabold leading-tight sm:text-5xl lg:text-7xl"
+              className="max-w-4xl text-5xl font-bold leading-[0.98] tracking-normal sm:text-6xl lg:text-8xl"
             >
               Reserve campus venues. Track approvals end-to-end.
             </motion.h1>
             <motion.p
               variants={fadeInUp}
-              className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-white/80 lg:mx-0"
+              className="mx-auto mt-8 max-w-2xl text-xl font-medium leading-9 text-white/85 lg:mx-0"
             >
               Check venue availability, submit requests, and follow every
               approver step until SDS clearance.
             </motion.p>
             <motion.div
               variants={fadeInUp}
-              className="mt-8 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start"
+              className="mt-8 flex flex-col justify-center gap-3 font-serif sm:flex-row lg:justify-start"
             >
               <Button asChild size="lg">
                 <Link href={accountHref}>
@@ -281,7 +281,7 @@ export default function Home() {
             <motion.div variants={fadeInUp} className="mt-4">
               <Link
                 href="#approval-chain"
-                className="inline-flex items-center gap-2 text-sm font-medium text-white/85 underline-offset-4 transition hover:text-white hover:underline"
+                className="inline-flex items-center gap-2 text-base font-medium text-white/85 underline-offset-4 transition hover:text-white hover:underline"
               >
                 View full approval chain
               </Link>
@@ -296,14 +296,14 @@ export default function Home() {
                   href={path.href}
                   className="rounded-md border border-white/20 bg-white/10 p-3 text-left backdrop-blur-sm transition hover:bg-white/20"
                 >
-                  <p className="text-sm font-semibold text-white">{path.role}</p>
-                  <p className="mt-1 text-xs text-white/70">{path.description}</p>
+                  <p className="text-base font-semibold text-white">{path.role}</p>
+                  <p className="mt-1 text-sm text-white/70">{path.description}</p>
                 </Link>
               ))}
             </motion.div>
             <motion.p
               variants={fadeInUp}
-              className="mt-5 text-sm text-white/60"
+              className="mt-5 text-base text-white/60"
             >
               Accounts are created by the super admin. Public self-registration
               is disabled.
@@ -320,8 +320,8 @@ export default function Home() {
                   <FileText className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="font-semibold">Reservation Request Flow</p>
-                  <p className="text-sm text-white/60">
+                  <p className="text-xl font-semibold">Reservation Request Flow</p>
+                  <p className="text-base text-white/60">
                     Guided request and approval steps
                   </p>
                 </div>
@@ -337,7 +337,7 @@ export default function Home() {
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-bold text-background">
                     {index + 1}
                   </div>
-                  <p className="text-sm font-medium">{step}</p>
+                  <p className="text-lg font-semibold">{step}</p>
                 </motion.div>
               ))}
             </div>
@@ -356,8 +356,8 @@ export default function Home() {
           <div className="flex items-center gap-4 p-4">
             <MapPin className="h-9 w-9 text-blue-700 dark:text-blue-200" />
             <div>
-              <p className="text-2xl font-bold">Venue</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-3xl font-bold">Venue</p>
+              <p className="text-base text-muted-foreground">
                 Availability visibility
               </p>
             </div>
@@ -365,8 +365,8 @@ export default function Home() {
           <div className="flex items-center gap-4 border-t p-4 sm:border-l sm:border-t-0">
             <FileText className="h-9 w-9 text-emerald-700 dark:text-emerald-200" />
             <div>
-              <p className="text-2xl font-bold">Reservation</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-3xl font-bold">Reservation</p>
+              <p className="text-base text-muted-foreground">
                 Structured submissions
               </p>
             </div>
@@ -374,8 +374,8 @@ export default function Home() {
           <div className="flex items-center gap-4 border-t p-4 sm:border-l sm:border-t-0">
             <CheckCircle className="h-9 w-9 text-indigo-700 dark:text-indigo-200" />
             <div>
-              <p className="text-2xl font-bold">Approval</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-3xl font-bold">Approval</p>
+              <p className="text-base text-muted-foreground">
                 End-to-end progress
               </p>
             </div>
@@ -400,10 +400,10 @@ export default function Home() {
               <p className="mb-3 text-xs font-bold uppercase tracking-[0.28em] text-sky-700 dark:text-sky-300">
                 Approval Map
               </p>
-              <h3 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+              <h3 className="text-4xl font-bold tracking-normal sm:text-5xl">
                 Full approval chain
               </h3>
-              <p className="mt-3 max-w-3xl text-muted-foreground">
+              <p className="mt-3 max-w-3xl text-lg text-muted-foreground">
                 Swipe on touch devices or use arrows to view full sequence:
                 officer, adviser, dean, SDS, SAS, optional signatories, VPAA
                 Assistant, VPAA, and University President.
@@ -450,8 +450,8 @@ export default function Home() {
                 <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
                   Stage {index + 1}
                 </p>
-                <p className="mt-2 text-xl font-bold">{item.title}</p>
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 text-2xl font-bold">{item.title}</p>
+                <p className="mt-2 text-base text-muted-foreground">
                   {item.detail}
                 </p>
                 <span
@@ -488,10 +488,10 @@ export default function Home() {
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
           >
-            <h2 className="text-3xl font-bold tracking-normal text-white sm:text-4xl">
+            <h2 className="text-4xl font-bold tracking-normal text-white sm:text-5xl">
               Built around the Zerve approval workflow.
             </h2>
-            <p className="mt-3 text-lg text-white/75">
+            <p className="mt-3 text-xl text-white/75">
               The system supports practical reservation work: venue scheduling,
               reviewer routing, SDS clearance, document generation, and
               progress visibility.
@@ -516,8 +516,8 @@ export default function Home() {
                       >
                         <Icon className={`h-6 w-6 ${feature.color}`} />
                       </div>
-                      <CardTitle>{feature.title}</CardTitle>
-                      <CardDescription className="text-base text-white/70">
+                      <CardTitle className="text-2xl">{feature.title}</CardTitle>
+                      <CardDescription className="text-lg text-white/70">
                         {feature.description}
                       </CardDescription>
                     </CardHeader>
@@ -537,10 +537,10 @@ export default function Home() {
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
         >
-          <h2 className="text-3xl font-bold sm:text-4xl">
+          <h2 className="text-4xl font-bold sm:text-5xl">
             Ready to manage your venue reservation?
           </h2>
-          <p className="mx-auto mt-3 max-w-2xl text-white/70">
+          <p className="mx-auto mt-3 max-w-2xl text-xl text-white/70">
             Sign in with your Zerve account or check the public calendar before
             planning your activity.
           </p>

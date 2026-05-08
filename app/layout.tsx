@@ -2,7 +2,7 @@ import PopupProvider from "@/app/components/Popup/PopupProvider";
 import NetworkStatus from "@/app/components/NetworkStatus";
 import { ThemeProvider } from "@/app/components/theme-provider";
 import { cn } from "@/lib/utils";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { PublicEnvScript } from "next-runtime-env";
 import { EB_Garamond, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -30,6 +30,12 @@ export const metadata: Metadata = {
     icon: "/logo_app.png",
     apple: "/logo_app.png",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

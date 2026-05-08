@@ -1,6 +1,9 @@
+import { syncSapfOperationalStatuses } from "@/app/components/pages/SAPF/SapfOperationalActions";
 import { prisma } from "@/lib/prisma";
 
 export async function getVenueCalendarData() {
+  await syncSapfOperationalStatuses();
+
   const [venues, globalBlocks] = await Promise.all([
     prisma.eventSpace.findMany({
       where: {
@@ -37,6 +40,12 @@ export async function getVenueCalendarData() {
                 department: true,
                 setting: true,
                 status: true,
+                operationalStatus: true,
+                equipmentRequests: {
+                  select: {
+                    status: true,
+                  },
+                },
                 createdAt: true,
                 schedules: {
                   select: {

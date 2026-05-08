@@ -53,6 +53,12 @@ import {
   RequestSummary,
   SapfActivityLog,
 } from "./SapfRequestDetail";
+import {
+  deriveSapfOperationalStatus,
+  hasSapfEventEnded,
+  isSapfEquipmentReleaseWindowOpen,
+  operationalStatusLabel,
+} from "./sapfLifecycle";
 
 function ButtonSpinner() {
   return <Loader2 className="mr-2 h-4 w-4 animate-spin" />;
@@ -64,30 +70,6 @@ function currentWorkflowStep(request: any) {
     request.approvalSteps?.find((step: any) => step.status === "RETURNED") ||
     null
   );
-}
-
-function firstScheduleStart(request: any) {
-  const schedules = Array.isArray(request?.schedules) ? request.schedules : [];
-  const first = schedules[0]?.startAt;
-  return first ? new Date(first) : null;
-}
-
-function lastScheduleEnd(request: any) {
-  const schedules = Array.isArray(request?.schedules) ? request.schedules : [];
-  const last = schedules[schedules.length - 1]?.endAt;
-  return last ? new Date(last) : null;
-}
-
-function isReleaseWindowOpen(request: any) {
-  const start = firstScheduleStart(request);
-  if (!start) return false;
-  const releaseWindow = new Date(start.getTime() - 3 * 24 * 60 * 60 * 1000);
-  return new Date() >= releaseWindow;
-}
-
-function hasEventEnded(request: any) {
-  const end = lastScheduleEnd(request);
-  return Boolean(end && new Date() >= end);
 }
 
 function lifecycleStepClass(active: boolean, done: boolean) {
@@ -161,9 +143,6 @@ export default function SapfBookingDetailPage({
     (sdsStep.status !== "PENDING" ||
       (request.currentStepOrder ?? 0) >= sdsStep.stepOrder ||
       request.status === "APPROVED");
-  const adviserApproved = request.approvalSteps?.some(
-    (step: any) => step.position === "ADVISER" && step.status === "APPROVED",
-  );
   const pendingChangeRequest = request.changeRequests?.find(
     (item: any) => item.status === "PENDING",
   );
@@ -178,9 +157,7 @@ export default function SapfBookingDetailPage({
   const showChat = hasThreads && me?.role === "OFFICER";
   const canEdit =
     me?.role === "OFFICER" &&
-    (["DRAFT", "RETURNED_FOR_REVISION"].includes(request.status) ||
-      (["SUBMITTED", "IN_REVIEW"].includes(request.status) &&
-        !adviserApproved));
+    ["DRAFT", "RETURNED_FOR_REVISION"].includes(request.status);
   const canRequestEdit =
     me?.role === "OFFICER" &&
     reachedSds &&
@@ -191,7 +168,7 @@ export default function SapfBookingDetailPage({
     me?.role === "OFFICER" &&
     request.status === "APPROVED" &&
     request.equipmentRequests?.some((item: any) => item.status === "PROVIDED") &&
-    hasEventEnded(request);
+    hasSapfEventEnded(request);
   const equipmentRequests = Array.isArray(request.equipmentRequests)
     ? request.equipmentRequests
     : [];
@@ -208,11 +185,15 @@ export default function SapfBookingDetailPage({
   const allEquipmentReturned =
     hasEquipment &&
     equipmentRequests.every((item: any) => item.status === "RETURNED");
-  const eventEnded = hasEventEnded(request);
-  const releaseWindowOpen = isReleaseWindowOpen(request);
-  const operationallyComplete =
+  const eventEnded = hasSapfEventEnded(request);
+  const eventStarted =
     request.status === "APPROVED" &&
-    (hasEquipment ? allEquipmentReturned : eventEnded);
+    ["ONGOING", "AWAITING_EQUIPMENT_RETURN", "RETURN_REQUESTED", "COMPLETED"].includes(
+      deriveSapfOperationalStatus(request),
+    );
+  const releaseWindowOpen = isSapfEquipmentReleaseWindowOpen(request);
+  const operationalStatus = deriveSapfOperationalStatus(request);
+  const operationallyComplete = operationalStatus === "COMPLETED";
   const activeStep = currentWorkflowStep(request);
   const officerActionSummary = canEdit
     ? "You can still edit directly."
@@ -222,8 +203,8 @@ export default function SapfBookingDetailPage({
         ? "Revise request, then resubmit."
         : request.status === "APPROVED"
           ? operationallyComplete
-            ? "Operationally complete."
-            : "Approved. Wait for event and equipment completion."
+            ? "Completed."
+            : operationalStatusLabel(operationalStatus)
           : request.status === "REJECTED"
             ? "Request closed after rejection."
             : request.status === "CANCELLED"
@@ -441,13 +422,24 @@ export default function SapfBookingDetailPage({
             Officer-side summary of current request state.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
+        <CardContent className="grid gap-3 md:grid-cols-4">
           <div className="rounded-md border bg-background p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Current status
+              Approval
             </p>
             <div className="mt-2">
               <StatusBadge status={request.status} />
+            </div>
+          </div>
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Operations
+            </p>
+            <div className="mt-2">
+              <StatusBadge
+                status={operationalStatus}
+                label={operationalStatusLabel(operationalStatus)}
+              />
             </div>
           </div>
           <div className="rounded-md border bg-background p-3">
@@ -492,17 +484,24 @@ export default function SapfBookingDetailPage({
             <div
               className={
                 lifecycleStepClass(
-                  !eventEnded && (!hasEquipment || hasPendingEquipment),
+                  operationalStatus === "WAITING_FOR_EVENT" ||
+                    operationalStatus === "ONGOING",
                   eventEnded,
                 ) + " rounded-lg border p-4"
               }
             >
               <CalendarClock className="h-5 w-5 text-sky-600" />
               <p className="mt-3 font-semibold">
-                {eventEnded ? "Event Window Done" : "Waiting for Event"}
+                {eventEnded
+                  ? "Event Done"
+                  : eventStarted
+                    ? "Ongoing"
+                    : "Waiting for Event"}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                {releaseWindowOpen
+                {eventStarted && !eventEnded
+                  ? "Venue use is currently active."
+                  : releaseWindowOpen
                   ? "Event is inside the equipment release window."
                   : "Equipment release opens 3 days before the event."}
               </p>

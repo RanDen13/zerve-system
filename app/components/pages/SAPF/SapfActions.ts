@@ -28,6 +28,10 @@ import {
 import { normalizeSapfRequest } from "./sapfData";
 import { normalizeSupportRequestLabel } from "./sapfEquipment";
 import {
+  syncSapfOperationalStatusById,
+  syncSapfOperationalStatuses,
+} from "./SapfOperationalActions";
+import {
   addSapfCalendarDays,
   formatSapfDateForMessage,
   formatSapfTime,
@@ -72,15 +76,17 @@ const MAX_SDS_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const MAX_PROGRAM_FLOW_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const APPROVAL_TIMEOUT_DAYS = 3;
 const APPROVAL_TIMEOUT_DAYS_BY_POSITION: Record<string, number> = {
-  ADVISER: 2,
-  DEAN: 2,
+  ADVISER: 3,
+  DEAN: 3,
   SDS: 3,
-  SAS: 2,
-  VPAA_ASSISTANT: 2,
-  VPAA: 2,
-  UNIVERSITY_PRESIDENT: 3,
-  ADDITIONAL_SIGNATORY: 2,
+  SAS: 3,
+  VPAA_ASSISTANT: 3,
+  VPAA: 3,
+  UNIVERSITY_PRESIDENT: 10,
+  ADDITIONAL_SIGNATORY: 3,
 };
+const ORGANIZATION_OPTIONS = ["SIES", "JPSSITE", "ACPES"] as const;
+const PROGRAM_COURSE_OPTIONS = ["BSCPE", "BSIT", "BSIE", "BSITCS"] as const;
 const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
 const ADMIN_ROLE = "ADMIN";
 const venueBlockTypes = ["UNIVERSITY_WIDE", "SYSTEM_MAINTENANCE"] as const;
@@ -470,6 +476,23 @@ async function nextRequestNumber(db: SapfDbClient = prisma) {
   return `${year}-${String(count + 1).padStart(3, "0")}`;
 }
 
+function composeBudgetDetails(data: FormData) {
+  const amount = field(data, "budgetRequestedAmount");
+  const purpose = field(data, "budgetPurpose");
+  const breakdown = field(data, "budgetBreakdown");
+  const legacy = field(data, "budgetDetails");
+
+  if (!amount && !purpose && !breakdown) return legacy;
+
+  return [
+    amount ? `Requested amount: ${amount}` : "",
+    purpose ? `Purpose: ${purpose}` : "",
+    breakdown ? `Breakdown: ${breakdown}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 async function createNotification(
   userId: string,
   title: string,
@@ -632,6 +655,24 @@ async function sendApprovalTimeoutReminder({
     "APPROVAL",
     request.id,
   );
+  await createNotification(
+    request.officerId,
+    "Approval still pending",
+    `${request.requestNumber} is still waiting for ${activeStep.label}. It may be automatically cancelled if ignored.`,
+    "APPROVAL",
+    request.id,
+  );
+  await notifyOfficerForSapfWorkflow({
+    requestId: request.id,
+    title: "is still waiting for approval",
+    eyebrow: `Approval reminder (${stageLabel})`,
+    headline: "Your reservation still needs approval",
+    message: `${request.requestNumber} is waiting for ${activeStep.label}. If this step is ignored past the deadline, the reservation will be automatically cancelled.`,
+    statusLabel: "Pending Approval",
+    tone: "warning",
+    actorName: activeStep.reviewer?.name || activeStep.label,
+    actionLabel: "View Reservation",
+  });
   await notifyApproverForSapfReview({
     requestId: request.id,
     reviewerId: activeStep.reviewerId,
@@ -689,13 +730,16 @@ async function enforceSapfApprovalTimeouts(options: { requestId?: string } = {})
     if (!activeStep) continue;
 
     const days = approvalTimeoutDaysForPosition(activeStep.position);
-    const comment = `${activeStep.label} did not respond within ${days} days. The reservation was automatically cancelled.`;
+    const comment = `${activeStep.label} ignored the approval request and did not respond within ${days} days. The reservation was automatically cancelled.`;
 
     await prisma.$transaction(async (tx) => {
       await tx.sAPFRequest.update({
         where: { id: request.id },
         data: {
           status: "CANCELLED" as any,
+          operationalStatus: "CANCELLED" as any,
+          operationalStatusUpdatedAt: new Date(),
+          completedAt: null,
           currentStepOrder: null,
           conflictWarning: false,
           cancelledRemarks: comment,
@@ -1062,7 +1106,7 @@ function buildSapfPayload(data: FormData) {
     budget: field(data, "budget"),
     sourceOfBudget: field(data, "sourceOfBudget"),
     supportRequests,
-    budgetDetails: field(data, "budgetDetails"),
+    budgetDetails: composeBudgetDetails(data),
     vehiclePassengers: field(data, "vehiclePassengers"),
     foodPax: field(data, "foodPax"),
     roomVenueDetails: field(data, "roomVenueDetails"),
@@ -1110,6 +1154,79 @@ function sapfColumnData(sapf: ReturnType<typeof buildSapfPayload>) {
     otherSupport: sapf.otherSupport || null,
     otherDetails: sapf.otherDetails || null,
   };
+}
+
+function validateSapfRequiredFields(
+  sapf: ReturnType<typeof buildSapfPayload>,
+  {
+    selectedVenue,
+    participantCount,
+    isSubmit,
+    revisionSummary,
+    wasReturnedForRevision,
+  }: {
+    selectedVenue: { capacity?: number | null; name?: string | null };
+    participantCount: number;
+    isSubmit: boolean;
+    revisionSummary?: string;
+    wasReturnedForRevision?: boolean;
+  },
+) {
+  if (!isSubmit) return;
+
+  const requiredFields: Array<[string, string]> = [
+    [sapf.activityTitle, "Activity title"],
+    [sapf.organization, "Organization"],
+    [sapf.department, "Department"],
+    [sapf.modality, "Modality"],
+    [sapf.programCourse, "Program/Course"],
+    [sapf.setting, "Setting"],
+    [sapf.personnelInCharge, "Personnel in charge"],
+    [sapf.activityType, "Activity type"],
+    [sapf.attire, "Attire"],
+    [sapf.scope, "Scope"],
+    [sapf.program, "Program"],
+    [sapf.rationale, "Rationale"],
+    [sapf.objectives, "Objectives"],
+    [sapf.programFlow, "Program flow"],
+    [sapf.emergencyPlan, "Emergency plan"],
+    [sapf.budget, "Personal budget"],
+    [sapf.sourceOfBudget, "Source of budget"],
+  ];
+
+  if (sapf.setting === "Off-Campus") {
+    requiredFields.push([sapf.offCampAgree, "Off-campus agreement"]);
+  }
+
+  const missing = requiredFields.find(([value]) => !String(value || "").trim());
+  if (missing) {
+    throw new Error(`${missing[1]} is required.`);
+  }
+
+  if (!ORGANIZATION_OPTIONS.includes(sapf.organization as any)) {
+    throw new Error("Organization must be SIES, JPSSITE, or ACPES.");
+  }
+  if (sapf.department !== "CITE") {
+    throw new Error("Department must be CITE.");
+  }
+  if (!PROGRAM_COURSE_OPTIONS.includes(sapf.programCourse as any)) {
+    throw new Error("Program/Course must be BSCPE, BSIT, BSIE, or BSITCS.");
+  }
+  if (!participantCount || participantCount < 1) {
+    throw new Error("No. of participants is required.");
+  }
+  const capacity = Number(selectedVenue.capacity || 0);
+  if (capacity > 0 && participantCount > capacity) {
+    throw new Error(
+      `${selectedVenue.name || "Selected venue"} can accommodate only ${capacity} participants.`,
+    );
+  }
+  if (sapf.supportRequests.includes("Budget") && !sapf.budgetDetails) {
+    throw new Error("Requested budget amount, purpose, and breakdown are required.");
+  }
+  if (wasReturnedForRevision && !String(revisionSummary || "").trim()) {
+    throw new Error("Add a comment explaining what changed before resubmitting.");
+  }
 }
 
 async function replaceSapfListRows(
@@ -1413,13 +1530,7 @@ function canOfficerEditSapfRequest(request: {
   currentStepOrder?: number | null;
   approvalSteps?: Array<{ position: string; status: string; stepOrder: number }>;
 }) {
-  if (["DRAFT", "RETURNED_FOR_REVISION"].includes(request.status)) return true;
-  if (["SUBMITTED", "IN_REVIEW"].includes(request.status)) {
-    return !request.approvalSteps?.some(
-      (step) => step.position === "ADVISER" && step.status === "APPROVED",
-    );
-  }
-  return false;
+  return ["DRAFT", "RETURNED_FOR_REVISION"].includes(request.status);
 }
 
 function canSdsEditSapfRequest(
@@ -1610,7 +1721,7 @@ type SapfListSurface = "bookings" | "approvals";
 type SapfListView = "pending" | "following" | "history";
 
 function sapfListAccessWhere(role: UserRoleValue, userId: string) {
-  if (role === "SUPER_ADMIN") return {};
+  if ([ADMIN_ROLE, SUPER_ADMIN_ROLE].includes(role)) return {};
   if (role === "OFFICER") return { officerId: userId };
 
   return {
@@ -1622,7 +1733,7 @@ function sapfListAccessWhere(role: UserRoleValue, userId: string) {
 }
 
 function sapfActiveReviewerWhere(role: UserRoleValue, userId: string) {
-  return role === "SUPER_ADMIN"
+  return [ADMIN_ROLE, SUPER_ADMIN_ROLE].includes(role)
     ? { approvalSteps: { some: { status: "ACTIVE" as any } } }
     : {
         approvalSteps: {
@@ -1637,7 +1748,7 @@ function sapfActiveReviewerWhere(role: UserRoleValue, userId: string) {
 function sapfFollowingWhere(role: UserRoleValue, userId: string) {
   const activeWhere = sapfActiveReviewerWhere(role, userId);
   const chainWhere =
-    role === "SUPER_ADMIN"
+    [ADMIN_ROLE, SUPER_ADMIN_ROLE].includes(role)
       ? {}
       : { approvalSteps: { some: { reviewerId: userId } } };
 
@@ -1654,14 +1765,24 @@ function requestFirstScheduleStart(request: any) {
   return new Date(schedules[0].startAt).getTime();
 }
 
-function requestActiveStep(request: any, userId: string) {
-  return (request.approvalSteps || []).find(
+function requestActiveStep(request: any, userId: string, role: UserRoleValue) {
+  const activeSteps = (request.approvalSteps || []).filter(
+    (step: any) => step.status === "ACTIVE",
+  );
+  if ([ADMIN_ROLE, SUPER_ADMIN_ROLE].includes(role)) {
+    return activeSteps[0];
+  }
+  return activeSteps.find(
     (step: any) => step.status === "ACTIVE" && step.reviewerId === userId,
   );
 }
 
-function approvalStepUrgencyRank(request: any, userId: string) {
-  const activeStep = requestActiveStep(request, userId);
+function approvalStepUrgencyRank(
+  request: any,
+  userId: string,
+  role: UserRoleValue,
+) {
+  const activeStep = requestActiveStep(request, userId, role);
   if (!activeStep) return Number.NEGATIVE_INFINITY;
 
   const activeAt = new Date(activeStep.updatedAt || request.updatedAt).getTime();
@@ -1705,6 +1826,7 @@ export async function getSapfRequestList({
     }
 
     await enforceSapfApprovalTimeouts();
+    await syncSapfOperationalStatuses();
     await sendEquipmentDueReminders();
 
     if (surface === "approvals" && role === "OFFICER") {
@@ -1756,8 +1878,8 @@ export async function getSapfRequestList({
       role !== "OFFICER" && view === "pending"
         ? [...requests].sort(
             (a: any, b: any) =>
-              approvalStepUrgencyRank(b, user.id) -
-              approvalStepUrgencyRank(a, user.id),
+              approvalStepUrgencyRank(b, user.id, role) -
+              approvalStepUrgencyRank(a, user.id, role),
           )
         : requests;
 
@@ -1797,6 +1919,7 @@ export async function getSapfWorkspace(): Promise<ActionResult<any>> {
     }
 
     await enforceSapfApprovalTimeouts();
+    await syncSapfOperationalStatuses();
     await sendEquipmentDueReminders();
 
     const include = {
@@ -2008,8 +2131,9 @@ export async function getSapfWorkspace(): Promise<ActionResult<any>> {
           const thread = step.concernThread;
           const canSeeThread =
             !thread ||
-            (role !== "SUPER_ADMIN" &&
-              (thread.officerId === user.id || thread.reviewerId === user.id));
+            canSeeAllRequests ||
+            thread.officerId === user.id ||
+            thread.reviewerId === user.id;
 
           return {
             ...step,
@@ -2060,6 +2184,7 @@ export async function getSapfRequestById(
     }
 
     await enforceSapfApprovalTimeouts({ requestId: id });
+    await syncSapfOperationalStatuses({ requestId: id });
     await sendEquipmentDueReminders();
 
     const include = {
@@ -2190,11 +2315,13 @@ export async function getSapfRequestById(
       },
     };
 
-    const requestWhere =
-      role === "SUPER_ADMIN"
-        ? { id }
-        : role === "OFFICER"
-          ? { id, officerId: user.id }
+    const canSeeAllRequests = [ADMIN_ROLE, SUPER_ADMIN_ROLE].includes(role);
+    const requestWhere = canSeeAllRequests
+      ? { id }
+      : role === "OFFICER"
+        ? { id, officerId: user.id }
+        : role === "EQUIPMENT_PROVISIONER"
+          ? { id, equipmentRequests: { some: {} } }
           : {
               id,
               OR: [
@@ -2218,8 +2345,9 @@ export async function getSapfRequestById(
         const thread = step.concernThread;
         const canSeeThread =
           !thread ||
-          (role !== "SUPER_ADMIN" &&
-            (thread.officerId === user.id || thread.reviewerId === user.id));
+          canSeeAllRequests ||
+          thread.officerId === user.id ||
+          thread.reviewerId === user.id;
 
         return {
           ...step,
@@ -2319,10 +2447,10 @@ export async function saveSapfRequest(
       };
     }
 
-    if (venueIds.length === 0) {
+    if (venueIds.length !== 1) {
       return {
         success: false,
-        message: "Select at least one venue.",
+        message: "Select exactly one venue.",
       };
     }
 
@@ -2357,6 +2485,13 @@ export async function saveSapfRequest(
         message: "No. of participants is required.",
       };
     }
+    const participantCount = Number(attendeeCount.replace(/[^\d]/g, ""));
+    if (!Number.isFinite(participantCount) || participantCount < 1) {
+      return {
+        success: false,
+        message: "No. of participants must be a valid number.",
+      };
+    }
 
     const shouldReserveSlot = isSubmit || Boolean(existing && existing.status !== "DRAFT");
     const conflict = await detectConflicts(
@@ -2372,7 +2507,14 @@ export async function saveSapfRequest(
     }
 
     const sapf = buildSapfPayload(data);
-    sapf.venue = selectedVenues.map((venue) => venue.name).join(", ");
+    sapf.venue = selectedVenues[0]?.name || "";
+    validateSapfRequiredFields(sapf, {
+      selectedVenue: selectedVenues[0],
+      participantCount,
+      isSubmit,
+      revisionSummary: field(data, "revisionSummary"),
+      wasReturnedForRevision: existing?.status === "RETURNED_FOR_REVISION",
+    });
     await validateSapfEquipmentAvailability({
       sapf,
       scheduleSlots,
@@ -2537,6 +2679,7 @@ export async function saveSapfRequest(
       });
     } else {
       const resubmittedAt = new Date();
+      const revisionSummary = field(data, "revisionSummary");
       const returnedStep = isSubmit
         ? [...existing.approvalSteps]
             .filter((step) => step.status === "RETURNED")
@@ -2644,14 +2787,28 @@ export async function saveSapfRequest(
           await logSapfActivity(tx, {
             requestId: updated.id,
             actorId: user.id,
-            action: isSdsEditor ? "SDS_UPDATED" : "UPDATED",
-            title: isSdsEditor
-              ? "SDS updated the booking"
-              : "Booking updated",
-            description: `${userDisplayName(user)} updated ${changes.length} field${
-              changes.length === 1 ? "" : "s"
-            }.`,
-            metadata: { changes },
+            action:
+              returnedStep && isSubmit
+                ? "REVISION_RESUBMITTED"
+                : isSdsEditor
+                  ? "SDS_UPDATED"
+                  : "UPDATED",
+            title:
+              returnedStep && isSubmit
+                ? "Revision resubmitted"
+                : isSdsEditor
+                  ? "SDS updated the booking"
+                  : "Booking updated",
+            description:
+              returnedStep && isSubmit
+                ? `${userDisplayName(user)} resubmitted changes: ${revisionSummary}`
+                : `${userDisplayName(user)} updated ${changes.length} field${
+                    changes.length === 1 ? "" : "s"
+                  }.`,
+            metadata: {
+              changes,
+              revisionSummary: returnedStep && isSubmit ? revisionSummary : null,
+            },
           });
         }
 
@@ -2687,7 +2844,10 @@ export async function saveSapfRequest(
             existing?.status === "RETURNED_FOR_REVISION"
               ? ("RESUBMITTED" as any)
               : ("SUBMITTED" as any),
-          comment: null,
+          comment:
+            existing?.status === "RETURNED_FOR_REVISION"
+              ? field(data, "revisionSummary")
+              : null,
         },
       });
 
@@ -2701,10 +2861,14 @@ export async function saveSapfRequest(
             ? "Reservation resubmitted"
             : "Reservation submitted",
           description: resubmitted
-            ? `${userDisplayName(user)} resubmitted the revised reservation.`
+            ? `${userDisplayName(user)} resubmitted the revised reservation: ${field(
+                data,
+                "revisionSummary",
+              )}`
             : `${userDisplayName(user)} submitted the reservation for approval.`,
           metadata: {
             conflictWarning: requestData.conflictWarning,
+            revisionSummary: resubmitted ? field(data, "revisionSummary") : null,
           },
         });
       }
@@ -3281,6 +3445,9 @@ export async function reviewSapfChangeRequest(
           where: { id: request.id },
           data: {
             status: "CANCELLED" as any,
+            operationalStatus: "CANCELLED" as any,
+            operationalStatusUpdatedAt: now,
+            completedAt: null,
             currentStepOrder: null,
             conflictWarning: false,
             cancelledRemarks: cancelReason,
@@ -3745,6 +3912,13 @@ export async function reviewSapfRequest(
 
     if (action === "return") {
       const thread = await getOrCreateThread(request, step);
+      const revisionAttempt =
+        (await prisma.approvalAction.count({
+          where: {
+            requestId: request.id,
+            action: "RETURNED" as any,
+          },
+        })) + 1;
       await prisma.$transaction(async (tx) => {
         await tx.approvalStep.update({
           where: { id: step.id },
@@ -3783,23 +3957,19 @@ export async function reviewSapfRequest(
           requestId: request.id,
           actorId: user.id,
           action: "RETURNED",
-          title: `${step.label} returned the booking`,
-          description: `${userDisplayName(user)} returned the request for revision.`,
+          title: `${step.label} returned the booking for revision #${revisionAttempt}`,
+          description: `${userDisplayName(user)} returned the request for revision attempt #${revisionAttempt}.`,
           metadata: {
             stepId: step.id,
             stepLabel: step.label,
             reason: comment,
             reasonTag,
+            revisionAttempt,
           },
         });
       });
 
-      const returnCount = await prisma.approvalAction.count({
-        where: {
-          requestId: request.id,
-          action: "RETURNED" as any,
-        },
-      });
+      const returnCount = revisionAttempt;
       if (returnCount >= 3) {
         const escalationUsers = await prisma.user.findMany({
           where: {
@@ -3823,7 +3993,7 @@ export async function reviewSapfRequest(
       await createNotification(
         request.officerId,
         "Reservation returned for revision",
-        `${request.requestNumber} was returned by ${step.label}: ${comment}`,
+        `${request.requestNumber} was returned by ${step.label} for revision #${revisionAttempt}: ${comment}`,
         "REVISION",
         request.id,
       );
@@ -4020,6 +4190,7 @@ export async function reviewSapfRequest(
     });
 
     if (!nextStep) {
+      await syncSapfOperationalStatusById(request.id);
       await notifyProvisionersForEquipmentRequest(request.id, "approved");
       await notifyOfficerEquipmentStatusOnApproval(request.id);
     }

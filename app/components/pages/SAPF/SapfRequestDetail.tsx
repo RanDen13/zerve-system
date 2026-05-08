@@ -60,6 +60,10 @@ import {
   updateSdsEvaluation,
 } from "./SapfActions";
 import SapfReadonlyDetails from "./SapfReadonlyDetails";
+import {
+  deriveSapfOperationalStatus,
+  operationalStatusLabel,
+} from "./sapfLifecycle";
 import { formatSapfDate, formatSapfTime } from "./sapfSchedule";
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
@@ -277,6 +281,7 @@ export function RequestSummary({
     (step: any) => step.status === "ACTIVE",
   )?.updatedAt;
   const activeStep = requestActiveStep(request);
+  const operationalStatus = deriveSapfOperationalStatus(request);
   const openConcernCount = (request.approvalSteps || []).filter(
     (step: any) =>
       step.concernThread &&
@@ -325,6 +330,12 @@ export function RequestSummary({
           {showBadges && (
             <StatusBadge status={request.status} />
           )}
+          {showBadges && request.status === "APPROVED" && (
+            <StatusBadge
+              status={operationalStatus}
+              label={operationalStatusLabel(operationalStatus)}
+            />
+          )}
           {showConflict && request.conflictWarning && (
             <StatusBadge label="Pending conflict" tone="warning" />
           )}
@@ -372,14 +383,14 @@ function requestActiveStep(request: any) {
 function approvalDeadline(step: any) {
   if (!step) return null;
   const timeoutByPosition: Record<string, number> = {
-    ADVISER: 2,
-    DEAN: 2,
+    ADVISER: 3,
+    DEAN: 3,
     SDS: 3,
-    SAS: 2,
-    VPAA_ASSISTANT: 2,
-    VPAA: 2,
-    UNIVERSITY_PRESIDENT: 3,
-    ADDITIONAL_SIGNATORY: 2,
+    SAS: 3,
+    VPAA_ASSISTANT: 3,
+    VPAA: 3,
+    UNIVERSITY_PRESIDENT: 10,
+    ADDITIONAL_SIGNATORY: 3,
   };
   const timeoutDays =
     timeoutByPosition[String(step.position || "").toUpperCase()] ??
@@ -863,11 +874,6 @@ function ReviewControls({
   const [attachmentInputKey, setAttachmentInputKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [returnTemplate, setReturnTemplate] = useState("");
-  const [reviewChecklist, setReviewChecklist] = useState({
-    scheduleChecked: false,
-    supportChecked: false,
-    attachmentsChecked: false,
-  });
   const [reasonTag, setReasonTag] = useState("OTHER");
   if (me?.role === "SUPER_ADMIN") return null;
   const step = request.approvalSteps?.find(
@@ -929,10 +935,6 @@ function ReviewControls({
     "Missing attachment",
     "Policy mismatch",
   ];
-  const approveChecklistComplete =
-    reviewChecklist.scheduleChecked &&
-    reviewChecklist.supportChecked &&
-    reviewChecklist.attachmentsChecked;
   const attachmentLimitExceeded = attachmentTotal > MAX_ATTACHMENT_BYTES;
   const deanOptions = approvers?.DEAN || [];
   const requiresDeanSelection =
@@ -1116,11 +1118,6 @@ function ReviewControls({
           className="w-full bg-emerald-600 hover:bg-emerald-700"
           onClick={() => {
             setReturnTemplate("");
-            setReviewChecklist({
-              scheduleChecked: false,
-              supportChecked: false,
-              attachmentsChecked: false,
-            });
             setReasonTag("OTHER");
             setSelectedAction("approve");
           }}
@@ -1237,60 +1234,6 @@ function ReviewControls({
                     )}
                   </div>
                 )}
-                {selectedAction === "approve" && (
-                  <div className="rounded-lg border bg-muted/40 p-3">
-                    <p className="text-sm font-semibold text-foreground">
-                      Final reviewer checklist
-                    </p>
-                    <p className="mb-3 text-xs text-muted-foreground">
-                      Confirm these before approving.
-                    </p>
-                    <div className="space-y-2 text-sm">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={reviewChecklist.scheduleChecked}
-                          onChange={(event) =>
-                            setReviewChecklist((current) => ({
-                              ...current,
-                              scheduleChecked: event.target.checked,
-                            }))
-                          }
-                          className="h-4 w-4 accent-primary"
-                        />
-                        Schedule and times verified
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={reviewChecklist.supportChecked}
-                          onChange={(event) =>
-                            setReviewChecklist((current) => ({
-                              ...current,
-                              supportChecked: event.target.checked,
-                            }))
-                          }
-                          className="h-4 w-4 accent-primary"
-                        />
-                        Support requests reviewed
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={reviewChecklist.attachmentsChecked}
-                          onChange={(event) =>
-                            setReviewChecklist((current) => ({
-                              ...current,
-                              attachmentsChecked: event.target.checked,
-                            }))
-                          }
-                          className="h-4 w-4 accent-primary"
-                        />
-                        Attachments and remarks checked
-                      </label>
-                    </div>
-                  </div>
-                )}
                 {selectedAction === "return" && (
                   <div className="rounded-lg border bg-muted/40 p-3">
                     <Label htmlFor="return-template">Reason template</Label>
@@ -1363,8 +1306,7 @@ function ReviewControls({
                     type="submit"
                     disabled={
                       submitting ||
-                      (selectedAction === "approve" &&
-                        (attachmentLimitExceeded || !approveChecklistComplete)) ||
+                      (selectedAction === "approve" && attachmentLimitExceeded) ||
                       missingDeanOptions
                     }
                     variant={

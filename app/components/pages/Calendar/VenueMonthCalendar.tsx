@@ -54,6 +54,7 @@ export type VenueCalendarItem = {
   startAt: Date | string;
   endAt: Date | string;
   status: "PENDING" | "BOOKED" | "APPROVED" | "BLOCKED";
+  operationalStatus?: string | null;
   scope?: "VENUE" | "UNIVERSITY" | "MAINTENANCE" | "OFF_CAMPUS";
   href?: string;
 };
@@ -145,7 +146,9 @@ function rainLabel(weather?: CalendarWeatherDay) {
   return "";
 }
 
-function statusClass(item: Pick<VenueCalendarItem, "status" | "scope">) {
+function statusClass(
+  item: Pick<VenueCalendarItem, "status" | "scope" | "operationalStatus">,
+) {
   if (item.scope === "OFF_CAMPUS") {
     return "border-sky-400/40 bg-sky-300/25 text-sky-800 dark:border-sky-300/30 dark:bg-sky-300/15 dark:text-sky-200";
   }
@@ -155,6 +158,12 @@ function statusClass(item: Pick<VenueCalendarItem, "status" | "scope">) {
   if (item.scope === "MAINTENANCE") {
     return "border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-200";
   }
+  if (item.operationalStatus === "ONGOING") {
+    return "border-sky-500/35 bg-sky-500/12 text-sky-700 dark:text-sky-200";
+  }
+  if (item.operationalStatus === "COMPLETED") {
+    return "border-muted bg-muted/50 text-muted-foreground";
+  }
   if (item.status === "APPROVED" || item.status === "BOOKED") {
     return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200";
   }
@@ -162,6 +171,21 @@ function statusClass(item: Pick<VenueCalendarItem, "status" | "scope">) {
     return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200";
   }
   return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200";
+}
+
+function statusDotClass(
+  item: Pick<VenueCalendarItem, "status" | "scope" | "operationalStatus">,
+) {
+  if (item.scope === "OFF_CAMPUS") return "bg-sky-300";
+  if (item.scope === "UNIVERSITY") return "bg-violet-500";
+  if (item.scope === "MAINTENANCE") return "bg-yellow-500";
+  if (item.operationalStatus === "ONGOING") return "bg-sky-500";
+  if (item.operationalStatus === "COMPLETED") return "bg-muted-foreground";
+  if (item.status === "APPROVED" || item.status === "BOOKED") {
+    return "bg-emerald-500";
+  }
+  if (item.status === "BLOCKED") return "bg-red-500";
+  return "bg-amber-500";
 }
 
 function asDate(value: Date | string) {
@@ -352,7 +376,7 @@ export default function VenueMonthCalendar({
           kiosk ? "p-5 lg:p-6" : "p-4"
         }`}
       >
-        <div className="flex min-w-0 items-center gap-4">
+        <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
           <div
             className={`shrink-0 rounded-lg border bg-card shadow-xs ${
               kiosk
@@ -390,14 +414,14 @@ export default function VenueMonthCalendar({
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
           {kiosk &&
             quickJumpDays.map((quickDay) => (
               <Button
                 key={quickDay.key}
                 type="button"
                 variant="outline"
-                className="h-11 px-4 text-sm font-semibold"
+                className="h-11 w-full px-4 text-sm font-semibold sm:w-auto"
                 onClick={() => selectCalendarDay(quickDay.date)}
               >
                 {quickDay.label}
@@ -405,7 +429,7 @@ export default function VenueMonthCalendar({
             ))}
           {selectedWeather ? (
             <div
-              className={`inline-flex items-center gap-2 rounded-md border bg-background shadow-xs ${
+              className={`col-span-2 inline-flex items-center justify-center gap-2 rounded-md border bg-background shadow-xs sm:col-span-1 ${
                 kiosk ? "h-11 px-4 text-base" : "h-9 px-3 text-sm"
               }`}
             >
@@ -422,19 +446,19 @@ export default function VenueMonthCalendar({
             </div>
           ) : weatherLoading ? (
             <div
-              className={`inline-flex items-center rounded-md border bg-background text-muted-foreground shadow-xs ${
+              className={`col-span-2 inline-flex items-center justify-center rounded-md border bg-background text-muted-foreground shadow-xs sm:col-span-1 ${
                 kiosk ? "h-11 px-4 text-base" : "h-9 px-3 text-sm"
               }`}
             >
               Loading weather...
             </div>
           ) : null}
-          <div className="flex overflow-hidden rounded-md border shadow-xs">
+          <div className="col-span-2 flex overflow-hidden rounded-md border shadow-xs sm:col-span-1">
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className={`rounded-none border-r ${kiosk ? "h-11 px-4" : "px-3"}`}
+              className={`flex-1 rounded-none border-r sm:flex-none ${kiosk ? "h-11 px-4" : "px-3"}`}
               onClick={goPrevious}
               aria-label={
                 calendarView === "month" ? "Previous month" : "Previous day"
@@ -446,7 +470,7 @@ export default function VenueMonthCalendar({
               type="button"
               variant="ghost"
               size="sm"
-              className={`rounded-none ${kiosk ? "h-11 px-5 text-sm font-semibold" : "px-4"}`}
+              className={`flex-1 rounded-none sm:flex-none ${kiosk ? "h-11 px-5 text-sm font-semibold" : "px-4"}`}
               onClick={goToday}
             >
               Today
@@ -455,7 +479,7 @@ export default function VenueMonthCalendar({
               type="button"
               variant="ghost"
               size="sm"
-              className={`rounded-none border-l ${kiosk ? "h-11 px-4" : "px-3"}`}
+              className={`flex-1 rounded-none border-l sm:flex-none ${kiosk ? "h-11 px-4" : "px-3"}`}
               onClick={goNext}
               aria-label={calendarView === "month" ? "Next month" : "Next day"}
             >
@@ -467,7 +491,7 @@ export default function VenueMonthCalendar({
             onValueChange={(value) => setCalendarView(value as CalendarView)}
           >
             <SelectTrigger
-              className={`min-w-32 bg-background ${
+              className={`w-full bg-background sm:min-w-32 ${
                 kiosk ? "h-11 text-base" : "h-9"
               }`}
             >
@@ -482,7 +506,7 @@ export default function VenueMonthCalendar({
       </div>
 
       <div
-        className={`flex flex-wrap gap-2 border-b bg-muted/40 ${
+        className={`grid grid-cols-2 gap-2 border-b bg-muted/40 sm:flex sm:flex-wrap ${
           kiosk ? "p-4" : "p-3"
         }`}
       >
@@ -504,7 +528,7 @@ export default function VenueMonthCalendar({
             {item.label}
           </span>
         ))}
-        <span className={`ml-auto text-muted-foreground ${kiosk ? "text-sm" : "text-xs"}`}>
+        <span className={`col-span-2 text-muted-foreground sm:ml-auto ${kiosk ? "text-sm" : "text-xs"}`}>
           {calendarView === "month"
             ? `${visibleMonthItems.length} item${
                 visibleMonthItems.length === 1 ? "" : "s"
@@ -590,6 +614,18 @@ function MonthCalendar({
 
   return (
     <>
+      <MobileMonthCalendar
+        kiosk={kiosk}
+        monthItems={monthItems}
+        selectedDay={selectedDay}
+        visibleMonth={visibleMonth}
+        weeks={weeks}
+        weatherByDate={weatherByDate}
+        onSelectDay={onSelectDay}
+        onOpenDay={onOpenDay}
+        onOpenItem={onOpenItem}
+      />
+      <div className="hidden md:block">
       <div
         className={`grid grid-cols-7 border-b bg-muted/40 text-center font-semibold text-muted-foreground ${
           kiosk ? "text-sm" : "text-xs"
@@ -737,7 +773,172 @@ function MonthCalendar({
           );
         })}
       </div>
+      </div>
     </>
+  );
+}
+
+function MobileMonthCalendar({
+  kiosk,
+  monthItems,
+  selectedDay,
+  visibleMonth,
+  weeks,
+  weatherByDate,
+  onSelectDay,
+  onOpenDay,
+  onOpenItem,
+}: {
+  kiosk: boolean;
+  monthItems: NormalizedCalendarItem[];
+  selectedDay: Date;
+  visibleMonth: Date;
+  weeks: Date[][];
+  weatherByDate: Map<string, CalendarWeatherDay>;
+  onSelectDay: (day: Date) => void;
+  onOpenDay: (day: Date) => void;
+  onOpenItem: (item: NormalizedCalendarItem) => void;
+}) {
+  const monthDays = weeks.flat();
+  const selectedDayItems = monthItems.filter((item) =>
+    itemTouchesDay(item, selectedDay),
+  );
+  const selectedWeather = weatherByDate.get(weatherDateKey(selectedDay));
+
+  return (
+    <div className="md:hidden">
+      <div className="grid grid-cols-7 border-b bg-muted/40 px-1 py-2 text-center text-[11px] font-bold uppercase tracking-normal text-muted-foreground">
+        {WEEKDAYS.map((day) => (
+          <div key={day}>{day.slice(0, 2)}</div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-px bg-border p-px">
+        {monthDays.map((day) => {
+          const dayItems = monthItems.filter((item) => itemTouchesDay(item, day));
+          const visibleDots = dayItems.slice(0, 3);
+          const isSelected = isSameDay(day, selectedDay);
+
+          return (
+            <button
+              key={day.toISOString()}
+              type="button"
+              className={cn(
+                "min-h-16 bg-card p-1.5 text-left transition hover:bg-muted/50",
+                !isSameMonth(day, visibleMonth) &&
+                  "bg-muted/35 text-muted-foreground/60",
+                isToday(day) && "bg-blue-500/10",
+                isSelected && "relative z-10 ring-2 ring-inset ring-violet-500",
+              )}
+              onClick={() => onSelectDay(day)}
+              onDoubleClick={() => onOpenDay(day)}
+              aria-label={`${format(day, "MMMM d")}, ${dayItems.length} item${
+                dayItems.length === 1 ? "" : "s"
+              }`}
+            >
+              <span
+                className={cn(
+                  "inline-flex h-7 min-w-7 items-center justify-center rounded-full px-1.5 text-sm font-bold",
+                  isToday(day) && "bg-violet-600 text-white",
+                  isSelected && !isToday(day) && "bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-100",
+                )}
+              >
+                {format(day, "d")}
+              </span>
+              {dayItems.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1">
+                  {visibleDots.map((item) => (
+                    <span
+                      key={`${item.id}-${weatherDateKey(day)}`}
+                      className={cn("h-1.5 w-1.5 rounded-full", statusDotClass(item))}
+                    />
+                  ))}
+                  {dayItems.length > visibleDots.length && (
+                    <span className="text-[10px] font-bold text-muted-foreground">
+                      +{dayItems.length - visibleDots.length}
+                    </span>
+                  )}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="space-y-3 border-t bg-muted/20 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
+              Selected day
+            </p>
+            <h4 className="text-lg font-bold text-foreground">
+              {format(selectedDay, "EEEE, MMM d")}
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              {selectedDayItems.length} item
+              {selectedDayItems.length === 1 ? "" : "s"} scheduled.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size={kiosk ? "default" : "sm"}
+            className="shrink-0"
+            onClick={() => onOpenDay(selectedDay)}
+          >
+            Day view
+          </Button>
+        </div>
+
+        {selectedWeather && (
+          <div className="flex items-center justify-between gap-3 rounded-md border bg-sky-500/5 p-3 text-sm">
+            <div>
+              <p className="font-semibold text-foreground">
+                {weatherSummary(selectedWeather.weatherCode)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {temperatureLabel(selectedWeather) || "Forecast"} -{" "}
+                {rainLabel(selectedWeather) || "Rain unavailable"}
+              </p>
+            </div>
+            <WeatherIcon
+              code={selectedWeather.weatherCode}
+              className="h-5 w-5 shrink-0 text-sky-600"
+            />
+          </div>
+        )}
+
+        {selectedDayItems.length === 0 ? (
+          <div className="rounded-md border border-dashed bg-card p-4 text-sm text-muted-foreground">
+            No reservations or blocks on this day.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {selectedDayItems.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={cn(
+                  "w-full rounded-md border p-3 text-left text-sm shadow-xs",
+                  statusClass(item),
+                )}
+                onClick={() => onOpenItem(item)}
+              >
+                <span className="block font-bold">{item.title}</span>
+                <span className="mt-1 block text-xs font-semibold">
+                  {itemTimeLabel(item)}
+                </span>
+                {item.subtitle && (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {item.subtitle}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -758,6 +959,21 @@ function DayCalendar({
   onSelectDay: (day: Date) => void;
   onOpenItem: (item: NormalizedCalendarItem) => void;
 }) {
+  const minuteHeight = HOUR_HEIGHT / 60;
+  const timeColumnWidth = kiosk ? 92 : 82;
+  const collapsedMaxHeight = kiosk ? 132 : 108;
+  const selectedDayKey = weatherDateKey(selectedDay);
+  const [expandedClusterState, setExpandedClusterState] = useState<{
+    dayKey: string;
+    ids: Set<string>;
+  }>(() => ({
+    dayKey: selectedDayKey,
+    ids: new Set(),
+  }));
+  const expandedClusterIds =
+    expandedClusterState.dayKey === selectedDayKey
+      ? expandedClusterState.ids
+      : new Set<string>();
   const hours = Array.from(
     { length: DAY_END_HOUR - DAY_START_HOUR },
     (_, index) => DAY_START_HOUR + index,
@@ -772,47 +988,223 @@ function DayCalendar({
   visibleStart.setHours(DAY_START_HOUR, 0, 0, 0);
   const visibleEnd = new Date(dayStart);
   visibleEnd.setHours(DAY_END_HOUR, 0, 0, 0);
-  const dayEventBlocks = dayItems
-    .map((item) => {
-      const clippedStart = clampDate(item.startAt, visibleStart, visibleEnd);
-      const clippedEnd = clampDate(item.endAt, visibleStart, visibleEnd);
-      const startMinutes =
-        clippedStart.getHours() * 60 +
-        clippedStart.getMinutes() -
-        DAY_START_HOUR * 60;
-      const durationMinutes = Math.max(
-        30,
-        (clippedEnd.getTime() - clippedStart.getTime()) / 60000,
-      );
-      const top = (startMinutes / 60) * HOUR_HEIGHT;
-      const height = Math.max(38, (durationMinutes / 60) * HOUR_HEIGHT);
+  const selectedWeather = weatherByDate.get(weatherDateKey(selectedDay));
 
-      return {
-        item,
-        top,
-        height,
-        end: top + height,
-        lane: 0,
-      };
+  const clippedBlocks = dayItems
+    .map((item) => {
+      const start = clampDate(item.startAt, visibleStart, visibleEnd);
+      const end = clampDate(item.endAt, visibleStart, visibleEnd);
+      return { item, start, end };
     })
-    .sort((a, b) => a.top - b.top || b.height - a.height);
-  const laneEnds: number[] = [];
-  dayEventBlocks.forEach((eventBlock) => {
-    let lane = laneEnds.findIndex((laneEnd) => eventBlock.top >= laneEnd);
-    if (lane === -1) {
-      lane = laneEnds.length;
+    .filter((block) => block.end > block.start)
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const eventClusters: Array<{
+    id: string;
+    start: Date;
+    end: Date;
+    blocks: typeof clippedBlocks;
+  }> = [];
+  clippedBlocks.forEach((block) => {
+    const activeCluster = eventClusters[eventClusters.length - 1];
+    if (!activeCluster || block.start > activeCluster.end) {
+      eventClusters.push({
+        id: "",
+        start: block.start,
+        end: block.end,
+        blocks: [block],
+      });
+      return;
     }
-    eventBlock.lane = lane;
-    laneEnds[lane] = eventBlock.end;
+
+    if (block.end > activeCluster.end) {
+      activeCluster.end = block.end;
+    }
+    activeCluster.blocks.push(block);
   });
-  const laneCount = Math.max(1, laneEnds.length);
-  const timelineHeight = hours.length * HOUR_HEIGHT;
+  eventClusters.forEach((cluster, index) => {
+    cluster.id = [
+      index,
+      cluster.start.getTime(),
+      cluster.end.getTime(),
+      cluster.blocks.map((block) => block.item.id).join("-"),
+    ].join(":");
+  });
+
+  const minutesBetween = (start: Date, end: Date) =>
+    Math.max(0, (end.getTime() - start.getTime()) / 60000);
+  const formatTimelineTime = (date: Date) =>
+    format(date, date.getMinutes() ? "h:mm a" : "h a");
+  const toggleCluster = (clusterId: string) => {
+    setExpandedClusterState((current) => {
+      const next =
+        current.dayKey === selectedDayKey
+          ? new Set(current.ids)
+          : new Set<string>();
+      if (next.has(clusterId)) {
+        next.delete(clusterId);
+      } else {
+        next.add(clusterId);
+      }
+      return { dayKey: selectedDayKey, ids: next };
+    });
+  };
+
+  let cursorTime = visibleStart;
+  let cursorTop = 0;
+  const clusterLayouts = eventClusters.map((cluster) => {
+    cursorTop += minutesBetween(cursorTime, cluster.start) * minuteHeight;
+
+    const durationMinutes = Math.max(1, minutesBetween(cluster.start, cluster.end));
+    const naturalHeight = Math.max(42, durationMinutes * minuteHeight);
+    const compactHeight = Math.max(
+      72,
+      Math.min(naturalHeight, collapsedMaxHeight + cluster.blocks.length * 10),
+    );
+    const expanded = expandedClusterIds.has(cluster.id);
+    const collapsed = !expanded && naturalHeight > compactHeight + 8;
+    const height = collapsed ? compactHeight : naturalHeight;
+    const layout = {
+      cluster,
+      top: cursorTop,
+      height,
+      naturalHeight,
+      collapsed,
+    };
+
+    cursorTop += height;
+    cursorTime = cluster.end;
+    return layout;
+  });
+  const timelineHeight = Math.max(
+    420,
+    cursorTop + minutesBetween(cursorTime, visibleEnd) * minuteHeight,
+  );
+  const topForTime = (date: Date) => {
+    let topCursor = 0;
+    let timeCursor = visibleStart;
+
+    for (const layout of clusterLayouts) {
+      if (date <= layout.cluster.start) {
+        return topCursor + minutesBetween(timeCursor, date) * minuteHeight;
+      }
+
+      if (date < layout.cluster.end) {
+        if (!layout.collapsed) {
+          return (
+            layout.top +
+            minutesBetween(layout.cluster.start, date) * minuteHeight
+          );
+        }
+
+        const elapsed = minutesBetween(layout.cluster.start, date);
+        const total = Math.max(1, minutesBetween(layout.cluster.start, layout.cluster.end));
+        return layout.top + (elapsed / total) * layout.height;
+      }
+
+      topCursor = layout.top + layout.height;
+      timeCursor = layout.cluster.end;
+    }
+
+    return topCursor + minutesBetween(timeCursor, date) * minuteHeight;
+  };
+  const hiddenTickTimes = new Set(
+    clusterLayouts
+      .filter((layout) => layout.collapsed)
+      .flatMap((layout) =>
+        hours.filter((hour) => {
+          const tick = new Date(dayStart);
+          tick.setHours(hour, 0, 0, 0);
+          return tick > layout.cluster.start && tick < layout.cluster.end;
+        }),
+      ),
+  );
+  const timelineTicks = hours
+    .map((hour) => {
+      const tick = new Date(dayStart);
+      tick.setHours(hour, 0, 0, 0);
+      return tick;
+    })
+    .filter((tick) => !hiddenTickTimes.has(tick.getHours()))
+    .map((tick) => ({ tick, top: topForTime(tick) }));
   const now = sapfCalendarDate(new Date());
   const showNow = isToday(selectedDay);
-  const nowTop =
-    ((now.getHours() * 60 + now.getMinutes() - DAY_START_HOUR * 60) / 60) *
-    HOUR_HEIGHT;
-  const selectedWeather = weatherByDate.get(weatherDateKey(selectedDay));
+  const nowTop = topForTime(now);
+
+  const renderExpandedBlocks = (
+    layout: (typeof clusterLayouts)[number],
+  ) => {
+    const blocks = layout.cluster.blocks
+      .map((block) => ({
+        ...block,
+        top: minutesBetween(layout.cluster.start, block.start) * minuteHeight,
+        height: Math.max(38, minutesBetween(block.start, block.end) * minuteHeight),
+        lane: 0,
+      }))
+      .sort((a, b) => a.top - b.top || b.height - a.height);
+    const laneEnds: number[] = [];
+    blocks.forEach((block) => {
+      let lane = laneEnds.findIndex((laneEnd) => block.top >= laneEnd);
+      if (lane === -1) {
+        lane = laneEnds.length;
+      }
+      block.lane = lane;
+      laneEnds[lane] = block.top + block.height;
+    });
+    const laneCount = Math.max(1, laneEnds.length);
+
+    return (
+      <div
+        className="absolute"
+        style={{
+          top: layout.top,
+          height: layout.height,
+          left: timeColumnWidth,
+          right: 0,
+        }}
+      >
+        <button
+          type="button"
+          className="absolute z-20 rounded-full border bg-background/95 px-2.5 py-1 text-[11px] font-bold text-muted-foreground shadow-sm hover:text-foreground"
+          style={{
+            left: 12,
+            top: 8,
+          }}
+          onClick={() => toggleCluster(layout.cluster.id)}
+        >
+          Collapse time
+        </button>
+        {blocks.map(({ item, top, height, lane }) => (
+          <button
+            type="button"
+            key={`${item.id}-${layout.cluster.id}`}
+            className={cn(
+              `absolute overflow-hidden rounded-md border text-left shadow-xs ${
+                kiosk ? "p-3 text-sm" : "p-2 text-xs"
+              }`,
+              statusClass(item),
+            )}
+            style={{
+              top,
+              height,
+              left: `calc(${(lane / laneCount) * 100}% + 12px)`,
+              right: `calc(${(1 - (lane + 1) / laneCount) * 100}% + 12px)`,
+            }}
+            title={`${item.title} - ${itemTimeLabel(item)}`}
+            onClick={() => onOpenItem(item)}
+          >
+            <p className="truncate font-semibold">{item.title}</p>
+            <p className="mt-1 truncate font-medium">{itemTimeLabel(item)}</p>
+            {item.subtitle && (
+              <p className="mt-1 line-clamp-2 text-muted-foreground">
+                {item.subtitle}
+              </p>
+            )}
+          </button>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="grid min-h-[620px] lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -821,69 +1213,90 @@ function DayCalendar({
           kiosk ? "max-h-[820px]" : "max-h-[720px]"
         }`}
       >
-        <div
-          className="relative grid grid-cols-[72px_minmax(0,1fr)]"
-          style={{ height: timelineHeight }}
-        >
-          {hours.map((hour) => (
-            <div key={hour} className="contents">
+        <div className="relative min-w-0" style={{ height: timelineHeight }}>
+          {timelineTicks.map(({ tick, top }) => (
+            <div
+              key={tick.toISOString()}
+              className="absolute left-0 right-0 grid items-start"
+              style={{
+                top,
+                gridTemplateColumns: `${timeColumnWidth}px minmax(0, 1fr)`,
+              }}
+            >
               <div
-                className={`border-r border-b bg-muted/20 pr-2 pt-2 text-right text-muted-foreground ${
+                className={`border-r pr-3 pt-2 text-right text-muted-foreground ${
                   kiosk ? "text-sm" : "text-xs"
                 }`}
               >
-                {format(new Date(2026, 0, 1, hour), "h a")}
+                {formatTimelineTime(tick)}
               </div>
-              <div className="border-b bg-card" />
+              <div className="h-px bg-border" />
             </div>
           ))}
 
+          <div
+            className="absolute bottom-0 top-0 border-r"
+            style={{ left: timeColumnWidth - 1 }}
+          />
+
+          {clusterLayouts.map((layout) =>
+            layout.collapsed ? (
+              <button
+                type="button"
+                key={layout.cluster.id}
+                className={cn(
+                  "absolute z-10 overflow-hidden rounded-md border p-3 text-left shadow-xs transition hover:-translate-y-0.5 hover:shadow-md",
+                  statusClass(layout.cluster.blocks[0].item),
+                )}
+                style={{
+                  top: layout.top,
+                  height: layout.height,
+                  left: timeColumnWidth + 12,
+                  right: 12,
+                }}
+                onClick={() => toggleCluster(layout.cluster.id)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-bold">
+                      {layout.cluster.blocks.length === 1
+                        ? layout.cluster.blocks[0].item.title
+                        : `${layout.cluster.blocks.length} occupied schedules`}
+                    </p>
+                    <p className="mt-1 text-xs font-semibold">
+                      {formatTimelineTime(layout.cluster.start)} -{" "}
+                      {formatTimelineTime(layout.cluster.end)}
+                    </p>
+                    <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                      Collapsed busy time. Tap to expand this range.
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full border bg-background/70 px-2 py-1 text-[10px] font-bold uppercase tracking-normal">
+                    Expand
+                  </span>
+                </div>
+              </button>
+            ) : (
+              <div key={layout.cluster.id}>{renderExpandedBlocks(layout)}</div>
+            ),
+          )}
+
           {showNow && nowTop >= 0 && nowTop <= timelineHeight && (
             <div
-              className="pointer-events-none absolute left-0 right-0 z-20 grid grid-cols-[72px_minmax(0,1fr)] items-center"
-              style={{ top: nowTop }}
+              className="pointer-events-none absolute left-0 right-0 z-30 grid -translate-y-1/2 items-center"
+              style={{
+                top: nowTop,
+                gridTemplateColumns: `${timeColumnWidth}px minmax(0, 1fr)`,
+              }}
             >
-              <div className="pr-2 text-right text-xs font-semibold text-violet-600">
-                {format(now, "h:mm a")}
+              <div className="flex justify-end pr-2">
+                <span className="rounded-full border border-violet-500/30 bg-background px-2 py-0.5 text-[11px] font-bold text-violet-600 shadow-sm">
+                  {format(now, "h:mm a")}
+                </span>
               </div>
               <div className="h-px bg-violet-500" />
             </div>
           )}
-
-          <div className="absolute left-[72px] right-0 top-0">
-            {dayEventBlocks.map(({ item, top, height, lane }) => {
-              return (
-                <button
-                  type="button"
-                  key={item.id}
-                  className={cn(
-                    `absolute left-3 right-3 overflow-hidden rounded-md border text-left shadow-xs ${
-                      kiosk ? "p-3 text-sm" : "p-2 text-xs"
-                    }`,
-                    statusClass(item),
-                  )}
-                  style={{
-                    top,
-                    height,
-                    left: `calc(${(lane / laneCount) * 100}% + 12px)`,
-                    right: `calc(${(1 - (lane + 1) / laneCount) * 100}% + 12px)`,
-                  }}
-                  title={`${item.title} - ${itemTimeLabel(item)}`}
-                  onClick={() => onOpenItem(item)}
-                >
-                  <p className="truncate font-semibold">{item.title}</p>
-                  <p className="mt-1 truncate font-medium">
-                    {itemTimeLabel(item)}
-                  </p>
-                  {item.subtitle && (
-                    <p className="mt-1 line-clamp-2 text-muted-foreground">
-                      {item.subtitle}
-                    </p>
-                  )}
-                </button>
-              );
-            })}
-          </div>
         </div>
       </div>
 

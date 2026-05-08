@@ -53,13 +53,7 @@ function hasReachedSds(request: any) {
 }
 
 function canOfficerEditRequest(request: any) {
-  if (["DRAFT", "RETURNED_FOR_REVISION"].includes(request.status)) return true;
-  if (["SUBMITTED", "IN_REVIEW"].includes(request.status)) {
-    return !request.approvalSteps?.some(
-      (step: any) => step.position === "ADVISER" && step.status === "APPROVED",
-    );
-  }
-  return false;
+  return ["DRAFT", "RETURNED_FOR_REVISION"].includes(request.status);
 }
 
 function canSdsEditRequest(request: any, userId: string) {
@@ -139,7 +133,7 @@ const page = async ({
   const request = requestResult?.data?.request;
   if (request && role === "OFFICER" && !canOfficerEditRequest(request)) {
     return (
-      <ErrorCard message="This request can only be edited before adviser approval or after it has been returned." />
+      <ErrorCard message="Submitted bookings can only be edited after an approver returns them for revision." />
     );
   }
 
@@ -153,7 +147,7 @@ const page = async ({
     <PageShell>
       <PageHeader
         title={request ? "Edit Booking" : "Create Booking"}
-        description="Select venues and complete the SAPF reservation request."
+        description="Select one venue and complete the SAPF reservation request."
         backHref="/user/bookings"
       />
       {request?.status === "RETURNED_FOR_REVISION" && (

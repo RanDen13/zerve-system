@@ -113,6 +113,8 @@ model SAPFRequest {
   department                  String
   attendeeCount               String
   status                      SAPFRequestStatus       @default(DRAFT)
+  operationalStatus           SAPFOperationalStatus   @default(NOT_STARTED)
+  operationalStatusUpdatedAt  DateTime?
   currentStepOrder            Int?
   conflictWarning             Boolean                 @default(false)
   rejectionReason             String?
@@ -155,6 +157,7 @@ model SAPFRequest {
   cancelledRemarks            String?
   verificationToken           String?                 @unique
   approvedAt                  DateTime?
+  completedAt                 DateTime?
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
   approvalActions             ApprovalAction[]
@@ -174,6 +177,7 @@ model SAPFRequest {
 
   @@index([officerId])
   @@index([status])
+  @@index([operationalStatus])
   @@map("sapf_request")
 }
 
@@ -561,6 +565,18 @@ enum SAPFRequestStatus {
   RETURNED_FOR_REVISION
   REJECTED
   APPROVED
+  CANCELLED
+}
+
+enum SAPFOperationalStatus {
+  NOT_STARTED
+  WAITING_FOR_EVENT
+  EQUIPMENT_PENDING
+  EQUIPMENT_PROVIDED
+  ONGOING
+  AWAITING_EQUIPMENT_RETURN
+  RETURN_REQUESTED
+  COMPLETED
   CANCELLED
 }
 

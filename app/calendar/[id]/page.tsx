@@ -3,6 +3,10 @@ import { ModeToggle } from "@/app/components/mode-toggle";
 import VenueMonthCalendar, {
   VenueCalendarItem,
 } from "@/app/components/pages/Calendar/VenueMonthCalendar";
+import {
+  deriveSapfOperationalStatus,
+  operationalStatusLabel,
+} from "@/app/components/pages/SAPF/sapfLifecycle";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { getVenueCalendarData } from "@/lib/venue-calendar-data";
@@ -30,7 +34,9 @@ function calendarItems(venue: any, globalBlocks: any[]): VenueCalendarItem[] {
           request.setting === "Off-Campus" ? "Off-campus" : null,
           request.organization,
           request.department,
-          request.status?.replaceAll("_", " "),
+          request.status === "APPROVED"
+            ? operationalStatusLabel(deriveSapfOperationalStatus(request))
+            : request.status?.replaceAll("_", " "),
         ]
           .filter(Boolean)
           .join(" • "),
@@ -40,6 +46,10 @@ function calendarItems(venue: any, globalBlocks: any[]): VenueCalendarItem[] {
           request.status === "APPROVED"
             ? ("BOOKED" as const)
             : ("PENDING" as const),
+        operationalStatus:
+          request.status === "APPROVED"
+            ? deriveSapfOperationalStatus(request)
+            : null,
         scope:
           request.setting === "Off-Campus"
             ? ("OFF_CAMPUS" as const)

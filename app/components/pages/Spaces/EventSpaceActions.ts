@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { v4 as uuid } from "uuid";
 import { prettifyError } from "zod";
+import { syncSapfOperationalStatuses } from "../SAPF/SapfOperationalActions";
 import {
   createEventSpaceSchema,
   EventSpaceData,
@@ -142,6 +143,8 @@ export async function getEventSpaceById(
   id: string,
 ): Promise<ActionResult<EventSpaceData>> {
   try {
+    await syncSapfOperationalStatuses();
+
     const session = await auth.api.getSession({
       headers: await headers(),
     });
@@ -181,6 +184,12 @@ export async function getEventSpaceById(
                   organization: true,
                   setting: true,
                   status: true,
+                  operationalStatus: true,
+                  equipmentRequests: {
+                    select: {
+                      status: true,
+                    },
+                  },
                   schedules: {
                     select: {
                       id: true,

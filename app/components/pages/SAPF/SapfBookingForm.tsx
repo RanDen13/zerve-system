@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ChangeEvent, FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { EventSpaceData } from "../Spaces/schema";
 import { saveSapfRequest } from "./SapfActions";
 import {
@@ -107,6 +107,9 @@ const PROGRAM_OPTIONS = [
   "Seminar/Convention",
   "Others",
 ] as const;
+const ORGANIZATION_OPTIONS = ["SIES", "JPSSITE", "ACPES"] as const;
+const PROGRAM_COURSE_OPTIONS = ["BSCPE", "BSIT", "BSIE", "BSITCS"] as const;
+const CUSTOM_PERSONNEL_VALUE = "__custom__";
 
 const PROGRAM_ALIASES: Record<string, (typeof PROGRAM_OPTIONS)[number]> = {
   "team building": "Team Building",
@@ -121,6 +124,19 @@ const PROGRAM_ALIASES: Record<string, (typeof PROGRAM_OPTIONS)[number]> = {
 
 function ButtonSpinner() {
   return <Loader2 className="mr-2 h-4 w-4 animate-spin" />;
+}
+
+function RequiredMark() {
+  return <span className="ml-1 text-destructive">*</span>;
+}
+
+function amountInput(value: string) {
+  const digits = value.replace(/[^\d.]/g, "");
+  const [whole = "", decimal = ""] = digits.split(".");
+  const cleanWhole = whole.replace(/^0+(?=\d)/, "");
+  const grouped = cleanWhole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  if (decimal) return `${grouped}.${decimal.slice(0, 2)}`;
+  return grouped;
 }
 
 function formatFileSize(bytes: number) {
@@ -277,6 +293,7 @@ export default function SapfBookingForm({
 }) {
   const popup = usePopup();
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const initialScheduleRows = getRequestScheduleRows(initialRequest);
   const initialVenueIds = initialRequest
     ? selectedVenueIdsFromRequest(initialRequest)
@@ -284,7 +301,12 @@ export default function SapfBookingForm({
   const [scheduleRows, setScheduleRows] =
     useState<ScheduleRow[]>(initialScheduleRows);
   const [selectedVenueIds, setSelectedVenueIds] =
-    useState<string[]>(initialVenueIds);
+    useState<string[]>(initialVenueIds.slice(0, 1));
+  const [participantCount, setParticipantCount] = useState(
+    String(initialRequest?.sapfPart1?.noOfParticipants || ""),
+  );
+  const [nativeFormReady, setNativeFormReady] = useState(false);
+  const [capacityWarning, setCapacityWarning] = useState("");
   const [programFlowAttachmentTotal, setProgramFlowAttachmentTotal] =
     useState(0);
   const [programFlowAttachmentNames, setProgramFlowAttachmentNames] = useState<
@@ -311,6 +333,26 @@ export default function SapfBookingForm({
   const [otherProgram, setOtherProgram] = useState(initialProgram.other);
   const [selectedSetting, setSelectedSetting] = useState(
     part1.setting || "In-Campus",
+  );
+  const adviserDeanPersonnelOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return [...(approvers.ADVISER || []), ...(approvers.DEAN || [])].filter(
+      (user) => {
+        if (seen.has(user.id)) return false;
+        seen.add(user.id);
+        return true;
+      },
+    );
+  }, [approvers]);
+  const existingPersonnel = String(part1.personnelInCharge || "").trim();
+  const existingPersonnelMatch = adviserDeanPersonnelOptions.find(
+    (user) => userNameWithTitle(user) === existingPersonnel,
+  );
+  const [selectedPersonnelId, setSelectedPersonnelId] = useState(
+    existingPersonnelMatch?.id || (existingPersonnel ? CUSTOM_PERSONNEL_VALUE : ""),
+  );
+  const selectedPersonnel = adviserDeanPersonnelOptions.find(
+    (user) => user.id === selectedPersonnelId,
   );
   const selectedCoreValues = new Set<string>(
     Array.isArray(part1.coreValues) ? part1.coreValues : [],
@@ -436,6 +478,8 @@ export default function SapfBookingForm({
   const selectedVenues = activeVenues.filter((venue) =>
     selectedVenueIds.includes(venue.id),
   );
+  const selectedVenue = selectedVenues[0] || null;
+  const selectedVenueCapacity = Number(selectedVenue?.capacity || 0);
   const scheduleRanges = useMemo(
     () => scheduleRangesFromRows(scheduleRows),
     [scheduleRows],
@@ -493,10 +537,10 @@ export default function SapfBookingForm({
   });
   const selectedVenueSummary =
     selectedVenues.length === 0
-      ? "Select venues"
+      ? "Select venue"
       : selectedVenues.length === 1
         ? selectedVenues[0].name
-        : `${selectedVenues.length} venues selected`;
+        : selectedVenues[0].name;
   const programFlowAttachmentLimitExceeded =
     programFlowAttachmentTotal > MAX_PROGRAM_FLOW_ATTACHMENT_BYTES;
   const bookingAdvanceDays = selectedVenues.length
@@ -583,15 +627,39 @@ export default function SapfBookingForm({
   ];
 
   const toggleVenue = (venueId: string, checked: boolean) => {
-    setSelectedVenueIds((current) =>
-      checked
-        ? [...new Set([...current, venueId])]
-        : current.filter((id) => id !== venueId),
-    );
+    setSelectedVenueIds(checked ? [venueId] : []);
+    if (checked) setVenuePopoverOpen(false);
+    setTimeout(() => {
+      const form = formRef.current;
+      setNativeFormReady(form ? form.checkValidity() : false);
+    }, 0);
   };
 
   const removeVenue = (venueId: string) => {
     setSelectedVenueIds((current) => current.filter((id) => id !== venueId));
+  };
+
+  const updateParticipantCount = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    if (!digits) {
+      setParticipantCount("");
+      setCapacityWarning("");
+      return;
+    }
+
+    const nextValue = Number(digits);
+    if (selectedVenueCapacity > 0 && nextValue > selectedVenueCapacity) {
+      setCapacityWarning(
+        `${selectedVenue?.name || "Selected venue"} can accommodate only ${selectedVenueCapacity} participants.`,
+      );
+      popup.showError(
+        `Participants cannot exceed venue capacity of ${selectedVenueCapacity}.`,
+      );
+      return;
+    }
+
+    setParticipantCount(digits);
+    setCapacityWarning("");
   };
 
   const selectAdviser = (userId: string) => {
@@ -676,9 +744,26 @@ export default function SapfBookingForm({
     const startTimes = formData.getAll("scheduleStartTime").map(String);
     const endTimes = formData.getAll("scheduleEndTime").map(String);
 
-    if (selectedVenueIds.length === 0) {
-      popup.showError("Select at least one venue.");
+    if (selectedVenueIds.length !== 1) {
+      popup.showError("Select one venue.");
       return;
+    }
+
+    if (capacityWarning) {
+      popup.showError(capacityWarning);
+      return;
+    }
+
+    if (intent === "submit" && initialRequest?.status === "RETURNED_FOR_REVISION") {
+      const revisionSummary = String(formData.get("revisionSummary") || "").trim();
+      if (!revisionSummary) {
+        popup.showError("Add a comment explaining what you changed.");
+        document.getElementById("revision-summary")?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+        return;
+      }
     }
 
     for (let index = 0; index < dates.length; index += 1) {
@@ -796,11 +881,18 @@ export default function SapfBookingForm({
   const approvalComplete =
     lockApprovalChain ||
     (Boolean(selectedAdviserId) && !hasMissingChainOptions);
+  const submitReady =
+    nativeFormReady &&
+    selectedVenueIds.length === 1 &&
+    approvalComplete &&
+    Boolean(selectedPersonnelId) &&
+    !programFlowAttachmentLimitExceeded &&
+    !capacityWarning;
   const formProgressSteps = [
     {
       href: "#form-venues",
       label: "Venues",
-      done: selectedVenueIds.length > 0,
+      done: selectedVenueIds.length === 1,
     },
     { href: "#form-schedule", label: "Schedule", done: scheduleComplete },
     { href: "#form-details", label: "Details", done: true },
@@ -812,7 +904,18 @@ export default function SapfBookingForm({
     { href: "#form-approval", label: "Approval", done: approvalComplete },
   ];
   return (
-    <form key={formKey} onSubmit={handleSubmit} className="space-y-6">
+    <form
+      ref={formRef}
+      key={formKey}
+      onSubmit={handleSubmit}
+      onInput={(event) => {
+        setNativeFormReady(event.currentTarget.checkValidity());
+      }}
+      onChange={(event) => {
+        setNativeFormReady(event.currentTarget.checkValidity());
+      }}
+      className="sapf-booking-form space-y-6"
+    >
       {!initialRequest?.id && (
         <input type="hidden" name="submissionKey" value={submissionKey} />
       )}
@@ -892,8 +995,7 @@ export default function SapfBookingForm({
               Submission readiness
             </p>
             <p className="mt-1 text-sm font-medium text-foreground">
-              {selectedVenueIds.length} venue
-              {selectedVenueIds.length === 1 ? "" : "s"}.
+              {selectedVenueIds.length === 1 ? selectedVenueSummary : "No venue"}.
               {" "}
               {scheduleRows.length} day{scheduleRows.length === 1 ? "" : "s"}.
               {" "}
@@ -918,7 +1020,7 @@ export default function SapfBookingForm({
         <CardHeader>
           <CardTitle>Venues</CardTitle>
           <CardDescription>
-            Select one or more venues for this SAPF request.
+            Select one venue for this SAPF request.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -968,7 +1070,13 @@ export default function SapfBookingForm({
                         }}
                         className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                       >
-                        <Checkbox checked={checked} className="mt-0.5" />
+                        <span
+                          className={`mt-1 h-3 w-3 shrink-0 rounded-full border ${
+                            checked
+                              ? "border-primary bg-primary"
+                              : "border-border bg-background"
+                          }`}
+                        />
                         <span className="min-w-0">
                           <span className="block font-semibold text-foreground">
                             {venue.name}
@@ -1009,6 +1117,25 @@ export default function SapfBookingForm({
         </CardContent>
       </Card>
 
+      {initialRequest?.status === "RETURNED_FOR_REVISION" && !isSdsEditor ? (
+        <Card id="revision-summary" className="scroll-mt-40 border-amber-500/40">
+          <CardHeader>
+            <CardTitle>Revision Comment<RequiredMark /></CardTitle>
+            <CardDescription>
+              Tell approver what changed before sending request back.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              name="revisionSummary"
+              rows={4}
+              placeholder="Example: Updated participant count and attached revised program flow."
+              required
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card id="form-schedule" className="scroll-mt-40">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1023,7 +1150,7 @@ export default function SapfBookingForm({
           <div className="flex items-start gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-900 dark:text-blue-100 md:col-span-3">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             <p>
-              Selected venue(s) can be booked {bookingAdvanceLabel}.
+              Selected venue can be booked {bookingAdvanceLabel}.
               Earliest available date: {earliestBookingDateLabel}.
             </p>
           </div>
@@ -1127,7 +1254,7 @@ export default function SapfBookingForm({
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
-            <Label>Activity Title</Label>
+            <Label>Activity Title<RequiredMark /></Label>
             <Input
               name="activityTitle"
               required
@@ -1135,30 +1262,60 @@ export default function SapfBookingForm({
             />
           </div>
           <div>
-            <Label>Organization</Label>
-            <Input
+            <Label>Organization<RequiredMark /></Label>
+            <Select
               name="organization"
-              required
               defaultValue={part1.organization || ""}
-            />
-          </div>
-          <div>
-            <Label>Department</Label>
-            <Input
-              name="department"
               required
-              defaultValue={part1.department || ""}
-            />
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select organization" />
+              </SelectTrigger>
+              <SelectContent>
+                {ORGANIZATION_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <Label>Program/Course</Label>
-            <Input
+            <Label>Department<RequiredMark /></Label>
+            <Select
+              name="department"
+              defaultValue={part1.department || "CITE"}
+              required
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CITE">CITE</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Program/Course<RequiredMark /></Label>
+            <Select
               name="programCourse"
               defaultValue={part1.programCourse || ""}
-            />
+              required
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select program/course" />
+              </SelectTrigger>
+              <SelectContent>
+                {PROGRAM_COURSE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <Label>Modality</Label>
+            <Label>Modality<RequiredMark /></Label>
             <Select
               name="modality"
               defaultValue={part1.modality || "Face-to-face"}
@@ -1174,7 +1331,7 @@ export default function SapfBookingForm({
             </Select>
           </div>
           <div>
-            <Label>Setting</Label>
+            <Label>Setting<RequiredMark /></Label>
             <Select
               name="setting"
               value={selectedSetting}
@@ -1243,14 +1400,49 @@ export default function SapfBookingForm({
             </div>
           ) : null}
           <div>
-            <Label>Personnel-In-Charge</Label>
-            <Input
-              name="personnelInCharge"
-              defaultValue={part1.personnelInCharge || ""}
-            />
+            <Label>Personnel-In-Charge<RequiredMark /></Label>
+            {selectedPersonnel ? (
+              <input
+                type="hidden"
+                name="personnelInCharge"
+                value={userNameWithTitle(selectedPersonnel)}
+              />
+            ) : null}
+            <Select
+              value={selectedPersonnelId}
+              onValueChange={(value) => {
+                setSelectedPersonnelId(value);
+                setTimeout(() => {
+                  const form = formRef.current;
+                  setNativeFormReady(form ? form.checkValidity() : false);
+                }, 0);
+              }}
+              required
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select adviser/dean or custom" />
+              </SelectTrigger>
+              <SelectContent>
+                {adviserDeanPersonnelOptions.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {userNameWithTitle(user)}
+                  </SelectItem>
+                ))}
+                <SelectItem value={CUSTOM_PERSONNEL_VALUE}>Other / Custom</SelectItem>
+              </SelectContent>
+            </Select>
+            {selectedPersonnelId === CUSTOM_PERSONNEL_VALUE ? (
+              <Input
+                name="personnelInCharge"
+                defaultValue={existingPersonnel}
+                placeholder="Enter personnel in charge"
+                className="mt-2"
+                required
+              />
+            ) : null}
           </div>
           <div>
-            <Label>Activity Type</Label>
+            <Label>Activity Type<RequiredMark /></Label>
             <Select
               name="activityType"
               defaultValue={part1.activityType || "Co-Curricular"}
@@ -1267,11 +1459,11 @@ export default function SapfBookingForm({
             </Select>
           </div>
           <div>
-            <Label>Attire</Label>
-            <Input name="attire" defaultValue={part1.attire || ""} />
+            <Label>Attire<RequiredMark /></Label>
+            <Input name="attire" defaultValue={part1.attire || ""} required />
           </div>
           <div>
-            <Label>Scope</Label>
+            <Label>Scope<RequiredMark /></Label>
             <Select name="scope" defaultValue={part1.scope || "Organizational"}>
               <SelectTrigger>
                 <SelectValue />
@@ -1285,17 +1477,31 @@ export default function SapfBookingForm({
             </Select>
           </div>
           <div>
-            <Label>No. of Participants</Label>
+            <Label>No. of Participants<RequiredMark /></Label>
             <Input
               name="noOfParticipants"
-              type="text"
-              placeholder="e.g., 50 or 50-500"
+              type="number"
+              min={1}
+              max={selectedVenueCapacity || undefined}
+              placeholder={
+                selectedVenueCapacity
+                  ? `Max ${selectedVenueCapacity}`
+                  : "Select venue first"
+              }
               required
-              defaultValue={part1.noOfParticipants || ""}
+              value={participantCount}
+              onChange={(event) => updateParticipantCount(event.target.value)}
             />
+            {capacityWarning ? (
+              <p className="mt-1 text-xs text-destructive">{capacityWarning}</p>
+            ) : selectedVenueCapacity ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Venue capacity: {selectedVenueCapacity}
+              </p>
+            ) : null}
           </div>
           <div>
-            <Label>Program</Label>
+            <Label>Program<RequiredMark /></Label>
             {selectedProgram !== "Others" ? (
               <input type="hidden" name="program" value={selectedProgram} />
             ) : null}
@@ -1337,7 +1543,7 @@ export default function SapfBookingForm({
             ) : null}
           </div>
           <div className="md:col-span-2">
-            <Label>Rationale</Label>
+            <Label>Rationale<RequiredMark /></Label>
             <Textarea
               name="rationale"
               rows={4}
@@ -1346,7 +1552,7 @@ export default function SapfBookingForm({
             />
           </div>
           <div className="md:col-span-2">
-            <Label>Objective/s</Label>
+            <Label>Objective/s<RequiredMark /></Label>
             <Textarea
               name="objectives"
               rows={4}
@@ -1395,10 +1601,11 @@ export default function SapfBookingForm({
             </div>
           </div>
           <div className="md:col-span-2">
-            <Label>Program Flow</Label>
+            <Label>Program Flow<RequiredMark /></Label>
             <Textarea
               name="programFlow"
               rows={3}
+              required
               defaultValue={part1.programFlow || ""}
             />
             <div className="mt-3 rounded-md border bg-muted p-3">
@@ -1448,23 +1655,34 @@ export default function SapfBookingForm({
             </div>
           </div>
           <div className="md:col-span-2">
-            <Label>Emergency Plan</Label>
+            <Label>Emergency Plan<RequiredMark /></Label>
             <Textarea
               name="emergencyPlan"
               rows={4}
               placeholder="Emergency plan for the activity"
+              required
               defaultValue={part1.emergencyPlan || ""}
             />
           </div>
           <div>
-            <Label>Budget</Label>
-            <Input name="budget" defaultValue={part1.budget || ""} />
+            <Label>Personal Budget<RequiredMark /></Label>
+            <Input
+              name="budget"
+              inputMode="decimal"
+              placeholder="00,000.00"
+              defaultValue={part1.budget || ""}
+              onBlur={(event) => {
+                event.currentTarget.value = amountInput(event.currentTarget.value);
+              }}
+              required
+            />
           </div>
           <div>
-            <Label>Source of Budget</Label>
+            <Label>Source of Budget<RequiredMark /></Label>
             <Input
               name="sourceOfBudget"
               defaultValue={part1.sourceOfBudget || ""}
+              required
             />
           </div>
         </CardContent>
@@ -1529,31 +1747,92 @@ export default function SapfBookingForm({
                   ) : null}
                   {detailField && checked ? (
                     <div className="mt-3 border-t pt-3">
-                      <Label
-                        htmlFor={detailField.name}
-                        className="text-xs font-medium text-muted-foreground"
-                      >
-                        {detailField.label}
-                      </Label>
-                      {detailField.multiline ? (
-                        <Textarea
-                          id={detailField.name}
-                          name={detailField.name}
-                          placeholder={detailField.placeholder}
-                          defaultValue={detailField.defaultValue}
-                          className="mt-2 min-h-24 resize-y"
-                        />
+                      {value === "Budget" ? (
+                        <div className="grid gap-3 md:grid-cols-3">
+                          <div>
+                            <Label
+                              htmlFor="budgetRequestedAmount"
+                              className="text-xs font-medium text-muted-foreground"
+                            >
+                              Requested Amount<RequiredMark />
+                            </Label>
+                            <Input
+                              id="budgetRequestedAmount"
+                              name="budgetRequestedAmount"
+                              inputMode="decimal"
+                              placeholder="00,000.00"
+                              defaultValue={part2.budgetRequestedAmount || ""}
+                              onBlur={(event) => {
+                                event.currentTarget.value = amountInput(
+                                  event.currentTarget.value,
+                                );
+                              }}
+                              className="mt-2"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label
+                              htmlFor="budgetPurpose"
+                              className="text-xs font-medium text-muted-foreground"
+                            >
+                              Purpose<RequiredMark />
+                            </Label>
+                            <Input
+                              id="budgetPurpose"
+                              name="budgetPurpose"
+                              placeholder="Purpose of requested budget"
+                              defaultValue={part2.budgetPurpose || ""}
+                              className="mt-2"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label
+                              htmlFor="budgetBreakdown"
+                              className="text-xs font-medium text-muted-foreground"
+                            >
+                              Breakdown<RequiredMark />
+                            </Label>
+                            <Input
+                              id="budgetBreakdown"
+                              name="budgetBreakdown"
+                              placeholder="Items / breakdown"
+                              defaultValue={part2.budgetBreakdown || part2.budgetDetails || ""}
+                              className="mt-2"
+                              required
+                            />
+                          </div>
+                        </div>
                       ) : (
-                        <Input
-                          id={detailField.name}
-                          name={detailField.name}
-                          type={equipmentInfo ? "number" : "text"}
-                          min={equipmentInfo ? 1 : undefined}
-                          max={equipmentInfo ? equipmentInfo.available : undefined}
-                          placeholder={detailField.placeholder}
-                          defaultValue={detailField.defaultValue}
-                          className="mt-2"
-                        />
+                        <>
+                          <Label
+                            htmlFor={detailField.name}
+                            className="text-xs font-medium text-muted-foreground"
+                          >
+                            {detailField.label}
+                          </Label>
+                          {detailField.multiline ? (
+                            <Textarea
+                              id={detailField.name}
+                              name={detailField.name}
+                              placeholder={detailField.placeholder}
+                              defaultValue={detailField.defaultValue}
+                              className="mt-2 min-h-24 resize-y"
+                            />
+                          ) : (
+                            <Input
+                              id={detailField.name}
+                              name={detailField.name}
+                              type={equipmentInfo ? "number" : "text"}
+                              min={equipmentInfo ? 1 : undefined}
+                              max={equipmentInfo ? equipmentInfo.available : undefined}
+                              placeholder={detailField.placeholder}
+                              defaultValue={detailField.defaultValue}
+                              className="mt-2"
+                            />
+                          )}
+                        </>
                       )}
                       {equipmentInfo && (
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -1855,7 +2134,9 @@ export default function SapfBookingForm({
         <p className="text-xs text-muted-foreground sm:mr-auto">
           {isSdsEditor
             ? "Save updates carefully. Changes are reflected on the active request."
-            : "Save a draft anytime. Submit sends the reservation into the approval workflow."}
+            : submitReady
+              ? "Ready to submit. All required fields passed."
+              : "Complete all required fields marked with red asterisk before submitting."}
         </p>
         {!isSdsEditor && (
           <Button
@@ -1878,7 +2159,7 @@ export default function SapfBookingForm({
           name="intent"
           value={isSdsEditor ? "save" : "submit"}
           className="bg-emerald-600 hover:bg-emerald-700"
-          disabled={Boolean(savingIntent)}
+          disabled={Boolean(savingIntent) || (!isSdsEditor && !submitReady)}
         >
           {savingIntent === (isSdsEditor ? "save" : "submit") ? (
             <ButtonSpinner />

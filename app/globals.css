@@ -127,7 +127,7 @@
     @apply scroll-smooth font-sans;
   }
   body {
-    @apply min-h-screen bg-background font-sans text-foreground antialiased;
+    @apply min-h-screen overflow-x-hidden bg-background font-sans text-foreground antialiased;
     font-feature-settings:
       "rlig" 1,
       "calt" 1;
@@ -167,5 +167,9 @@
 
   .text-balance {
     text-wrap: balance;
+  }
+
+  .sapf-booking-form :is(input, textarea):required:invalid {
+    @apply border-destructive/70 ring-destructive/15;
   }
 }
