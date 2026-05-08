@@ -1,4 +1,4 @@
-import { getEmailSettings } from "@/app/components/pages/Settings/SystemSettingsActions";
+import { getEmailSettings } from "@/lib/system-settings";
 import nodemailer from "nodemailer";
 
 function escapeHtml(input: string) {
