@@ -305,7 +305,7 @@ export default function Home() {
               variants={fadeInUp}
               className="mt-5 text-base text-white/60"
             >
-              Accounts are created by the super admin. Public self-registration
+              Contact Administration
               is disabled.
             </motion.p>
           </motion.div>
