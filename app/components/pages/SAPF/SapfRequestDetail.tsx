@@ -908,6 +908,12 @@ function ReviewControls({
   const [routePosition, setRoutePosition] = useState("");
   const [routeReviewerId, setRouteReviewerId] = useState("");
   const [routeSuggestionPosition, setRouteSuggestionPosition] = useState("");
+  const [adviserHandoff, setAdviserHandoff] = useState<"SDS" | "DEAN">("SDS");
+  const [adviserHandoffReviewerId, setAdviserHandoffReviewerId] = useState("");
+  const [returnTarget, setReturnTarget] = useState<"OFFICER" | "APPROVER">(
+    "OFFICER",
+  );
+  const [returnTargetStepId, setReturnTargetStepId] = useState("");
   if (me?.role === "SUPER_ADMIN") return null;
   const step = request.approvalSteps?.find(
     (item: any) => item.status === "ACTIVE" && item.reviewerId === me.id,
@@ -933,6 +939,10 @@ function ReviewControls({
       setRoutePosition("");
       setRouteReviewerId("");
       setRouteSuggestionPosition("");
+      setAdviserHandoff("SDS");
+      setAdviserHandoffReviewerId("");
+      setReturnTarget("OFFICER");
+      setReturnTargetStepId("");
       popup.showSuccess(result.message || "Review saved.");
       await onRefresh();
     } finally {
@@ -949,6 +959,32 @@ function ReviewControls({
   const routeReviewerValue =
     routeReviewerId || (routeReviewerOptions.length === 1 ? routeReviewerOptions[0].id : "");
   const routeReviewerRequired = routeReviewerOptions.length > 1;
+  const deanReviewerOptions = approvers?.DEAN || [];
+  const adviserHandoffReviewerValue =
+    adviserHandoffReviewerId ||
+    (deanReviewerOptions.length === 1 ? deanReviewerOptions[0].id : "");
+  const adviserDeanRequired =
+    step.position === "ADVISER" &&
+    adviserHandoff === "DEAN" &&
+    deanReviewerOptions.length > 1;
+  const missingAdviserDeanOptions =
+    step.position === "ADVISER" &&
+    adviserHandoff === "DEAN" &&
+    deanReviewerOptions.length === 0;
+  const sdsStepOrder =
+    request.approvalSteps?.find(
+      (item: any) => item.position === "SDS" && item.stepOrder < step.stepOrder,
+    )?.stepOrder ?? null;
+  const returnApproverSteps = (request.approvalSteps || []).filter(
+    (item: any) =>
+      sdsStepOrder !== null &&
+      item.stepOrder > sdsStepOrder &&
+      item.stepOrder < step.stepOrder &&
+      ["SAS", "ADDITIONAL_SIGNATORY", "VPAA_ASSISTANT", "VPAA"].includes(
+        item.position,
+      ) &&
+      item.reviewerId !== step.reviewerId,
+  );
   const missingRouteOptions =
     selectedAction === "route" &&
     Boolean(routePosition) &&
@@ -967,7 +1003,9 @@ function ReviewControls({
         : "Reject request";
   const selectedActionDescription =
     selectedAction === "approve"
-      ? isSdsStep || isPresidentFinalStep
+      ? step.position === "ADVISER"
+        ? "Approve adviser review, then choose Dean review or direct SDS handoff."
+        : isSdsStep || isPresidentFinalStep
         ? "This completes the reservation approval and locks the slot."
         : "Approve your review and send the request to SDS for routing."
       : selectedAction === "route"
@@ -999,7 +1037,11 @@ function ReviewControls({
   ];
   const attachmentLimitExceeded = attachmentTotal > MAX_ATTACHMENT_BYTES;
   const approveHandoffLabel =
-    isSdsStep || isPresidentFinalStep
+    step.position === "ADVISER"
+      ? adviserHandoff === "DEAN"
+        ? "Dean review"
+        : "SDS routing decision"
+      : isSdsStep || isPresidentFinalStep
       ? "Final approval"
       : "SDS routing decision";
 
@@ -1178,6 +1220,10 @@ function ReviewControls({
             setRoutePosition("");
             setRouteReviewerId("");
             setRouteSuggestionPosition("");
+            setAdviserHandoff("SDS");
+            setAdviserHandoffReviewerId("");
+            setReturnTarget("OFFICER");
+            setReturnTargetStepId("");
             setSelectedAction("approve");
           }}
           disabled={submitting}
@@ -1196,6 +1242,10 @@ function ReviewControls({
                 setReasonTag("OTHER");
                 setRoutePosition("");
                 setRouteReviewerId("");
+                setAdviserHandoff("SDS");
+                setAdviserHandoffReviewerId("");
+                setReturnTarget("OFFICER");
+                setReturnTargetStepId("");
                 setSelectedAction("route");
               }}
               disabled={submitting}
@@ -1212,6 +1262,10 @@ function ReviewControls({
                 setReasonTag("OTHER");
                 setRoutePosition("UNIVERSITY_PRESIDENT");
                 setRouteReviewerId("");
+                setAdviserHandoff("SDS");
+                setAdviserHandoffReviewerId("");
+                setReturnTarget("OFFICER");
+                setReturnTargetStepId("");
                 setSelectedAction("route");
               }}
               disabled={submitting}
@@ -1231,6 +1285,10 @@ function ReviewControls({
             setRoutePosition("");
             setRouteReviewerId("");
             setRouteSuggestionPosition("");
+            setAdviserHandoff("SDS");
+            setAdviserHandoffReviewerId("");
+            setReturnTarget("OFFICER");
+            setReturnTargetStepId("");
             setSelectedAction("return");
           }}
           disabled={submitting}
@@ -1248,6 +1306,10 @@ function ReviewControls({
             setRoutePosition("");
             setRouteReviewerId("");
             setRouteSuggestionPosition("");
+            setAdviserHandoff("SDS");
+            setAdviserHandoffReviewerId("");
+            setReturnTarget("OFFICER");
+            setReturnTargetStepId("");
             setSelectedAction("reject");
           }}
           disabled={submitting}
@@ -1274,6 +1336,18 @@ function ReviewControls({
                 <input type="hidden" name="stepId" value={step.id} />
                 <input type="hidden" name="action" value={selectedAction} />
                 <input type="hidden" name="reasonTag" value={reasonTag} />
+                <input type="hidden" name="adviserHandoff" value={adviserHandoff} />
+                <input
+                  type="hidden"
+                  name="adviserHandoffReviewerId"
+                  value={adviserHandoffReviewerValue}
+                />
+                <input type="hidden" name="returnTarget" value={returnTarget} />
+                <input
+                  type="hidden"
+                  name="returnTargetStepId"
+                  value={returnTargetStepId}
+                />
                 {selectedAction === "approve" && (
                   <div className="rounded-lg border bg-muted/40 p-3">
                     <p className="text-sm font-semibold text-foreground">
@@ -1284,8 +1358,86 @@ function ReviewControls({
                     </p>
                   </div>
                 )}
+                {selectedAction === "approve" && step.position === "ADVISER" && (
+                  <div className="rounded-lg border bg-muted/40 p-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        Adviser handoff
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Send to Dean for review, or skip Dean and hand off
+                        directly to SDS.
+                      </p>
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="adviser-handoff">Send to</Label>
+                        <Select
+                          value={adviserHandoff}
+                          onValueChange={(value) => {
+                            setAdviserHandoff(value as "SDS" | "DEAN");
+                            setAdviserHandoffReviewerId("");
+                          }}
+                        >
+                          <SelectTrigger id="adviser-handoff">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SDS">SDS</SelectItem>
+                            <SelectItem value="DEAN">Dean</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="adviser-handoff-reviewer">
+                          Dean reviewer
+                        </Label>
+                        <Select
+                          value={adviserHandoffReviewerValue}
+                          onValueChange={setAdviserHandoffReviewerId}
+                          disabled={
+                            adviserHandoff !== "DEAN" ||
+                            deanReviewerOptions.length === 0
+                          }
+                        >
+                          <SelectTrigger id="adviser-handoff-reviewer">
+                            <SelectValue
+                              placeholder={
+                                adviserHandoff === "DEAN"
+                                  ? "Select dean"
+                                  : "Not needed"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {deanReviewerOptions.map((reviewer: any) => (
+                              <SelectItem key={reviewer.id} value={reviewer.id}>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium">
+                                    {reviewer.name}
+                                  </span>
+                                  {reviewer.title && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {reviewer.title}
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {missingAdviserDeanOptions && (
+                          <p className="text-xs text-destructive">
+                            No active Dean account is configured.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {selectedAction === "approve" &&
                   !isSdsStep &&
+                  step.position !== "ADVISER" &&
                   !isPresidentFinalStep && (
                     <div className="rounded-lg border bg-muted/40 p-3">
                       <div className="space-y-1">
@@ -1443,6 +1595,88 @@ function ReviewControls({
                     </p>
                   </div>
                 )}
+                {selectedAction === "return" && (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        Return destination
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        You can return to the officer, or to an earlier routed
+                        approver after SDS. Adviser, Dean, SDS, and President
+                        are not valid approver-return targets.
+                      </p>
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="return-target">Return to</Label>
+                        <Select
+                          value={returnTarget}
+                          onValueChange={(value) => {
+                            setReturnTarget(value as "OFFICER" | "APPROVER");
+                            setReturnTargetStepId("");
+                          }}
+                        >
+                          <SelectTrigger id="return-target">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="OFFICER">Officer</SelectItem>
+                            <SelectItem
+                              value="APPROVER"
+                              disabled={returnApproverSteps.length === 0}
+                            >
+                              Routed approver
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="return-target-step">
+                          Approver target
+                        </Label>
+                        <Select
+                          value={returnTargetStepId}
+                          onValueChange={setReturnTargetStepId}
+                          disabled={
+                            returnTarget !== "APPROVER" ||
+                            returnApproverSteps.length === 0
+                          }
+                        >
+                          <SelectTrigger id="return-target-step">
+                            <SelectValue
+                              placeholder={
+                                returnTarget === "APPROVER"
+                                  ? "Select prior approver"
+                                  : "Not needed"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {returnApproverSteps.map((target: any) => (
+                              <SelectItem key={target.id} value={target.id}>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium">
+                                    {target.label}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {target.reviewer?.name || "Assigned reviewer"}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {returnTarget === "APPROVER" && (
+                          <p className="text-xs text-amber-700 dark:text-amber-200">
+                            A specific, valid reason is required before sending
+                            this back to another approver.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {(selectedAction === "return" || selectedAction === "reject") && (
                   <div className="space-y-2">
                     <Label htmlFor="reason-tag">Decision reason tag</Label>
@@ -1500,7 +1734,16 @@ function ReviewControls({
                       (selectedAction === "route" &&
                         (!routePosition ||
                           missingRouteOptions ||
-                          (routeReviewerRequired && !routeReviewerValue)))
+                          (routeReviewerRequired && !routeReviewerValue))) ||
+                      (selectedAction === "approve" &&
+                        step.position === "ADVISER" &&
+                        adviserHandoff === "DEAN" &&
+                        (missingAdviserDeanOptions ||
+                          (adviserDeanRequired &&
+                            !adviserHandoffReviewerValue))) ||
+                      (selectedAction === "return" &&
+                        returnTarget === "APPROVER" &&
+                        !returnTargetStepId)
                     }
                     variant={
                       selectedAction === "reject" ? "destructive" : "default"

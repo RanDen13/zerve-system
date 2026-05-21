@@ -374,6 +374,12 @@ export default function SapfBookingForm({
   const [venueSearch, setVenueSearch] = useState("");
   const [adviserPopoverOpen, setAdviserPopoverOpen] = useState(false);
   const [adviserSearch, setAdviserSearch] = useState("");
+  const [initialRouteTarget, setInitialRouteTarget] = useState<"ADVISER" | "DEAN">(
+    initialRequest?.approvalSteps?.find((step: any) => step.stepOrder === 1)
+      ?.position === "DEAN"
+      ? "DEAN"
+      : "ADVISER",
+  );
   const [savingIntent, setSavingIntent] = useState("");
   const [submissionKey] = useState(createSubmissionKey);
   const isEditing = Boolean(initialRequest);
@@ -505,6 +511,11 @@ export default function SapfBookingForm({
     )?.reviewerId || "";
   const [selectedAdviserId, setSelectedAdviserId] =
     useState(initialAdviserId);
+  const initialDeanId =
+    initialRequest?.approvalSteps?.find(
+      (step: any) => step.position === "DEAN",
+    )?.reviewerId || "";
+  const [selectedDeanId, setSelectedDeanId] = useState(initialDeanId);
   const updateFormValidity = () => {
     const form = formRef.current;
     setNativeFormReady(form ? form.checkValidity() : false);
@@ -645,10 +656,12 @@ export default function SapfBookingForm({
       ? `${bookingAdvanceDays} day${bookingAdvanceDays === 1 ? "" : "s"} in advance`
       : "immediately";
   const adviserOptions = approvers.ADVISER || [];
+  const deanOptions = approvers.DEAN || [];
   const budgetSupportSelected = activeSelectedSupportValues.includes("Budget");
   const selectedAdviser = adviserOptions.find(
     (user) => user.id === selectedAdviserId,
   );
+  const selectedDean = deanOptions.find((user) => user.id === selectedDeanId);
   const userMatchesSearch = (user: any, search: string) => {
     if (!search) return true;
     const normalized = search.trim().toLowerCase();
@@ -662,10 +675,17 @@ export default function SapfBookingForm({
   const adviserSummary = selectedAdviser
     ? userNameWithTitle(selectedAdviser)
     : "Select adviser";
+  const deanSummary = selectedDean ? userNameWithTitle(selectedDean) : "Select dean";
   const missingAdviserOptions =
-    !lockApprovalChain && adviserOptions.length === 0;
-  const hasMissingChainOptions = !lockApprovalChain && missingAdviserOptions;
-  const missingChainLabels = missingAdviserOptions ? ["Adviser"] : [];
+    !lockApprovalChain && initialRouteTarget === "ADVISER" && adviserOptions.length === 0;
+  const missingDeanOptions =
+    !lockApprovalChain && initialRouteTarget === "DEAN" && deanOptions.length === 0;
+  const hasMissingChainOptions =
+    !lockApprovalChain && (missingAdviserOptions || missingDeanOptions);
+  const missingChainLabels = [
+    ...(missingAdviserOptions ? ["Adviser"] : []),
+    ...(missingDeanOptions ? ["Dean"] : []),
+  ];
 
   const toggleVenue = (venueId: string, checked: boolean) => {
     setSelectedVenueIds(checked ? [venueId] : []);
@@ -704,6 +724,11 @@ export default function SapfBookingForm({
     if (lockApprovalChain) return;
     setSelectedAdviserId(userId);
     setAdviserPopoverOpen(false);
+  };
+
+  const selectInitialRouteTarget = (target: "ADVISER" | "DEAN") => {
+    if (lockApprovalChain) return;
+    setInitialRouteTarget(target);
   };
 
   const updateScheduleRow = (
@@ -902,7 +927,10 @@ export default function SapfBookingForm({
   );
   const approvalComplete =
     lockApprovalChain ||
-    (Boolean(selectedAdviserId) && !hasMissingChainOptions);
+    (!hasMissingChainOptions &&
+      (initialRouteTarget === "DEAN"
+        ? Boolean(selectedDeanId)
+        : Boolean(selectedAdviserId)));
   const submitReady =
     nativeFormReady &&
     selectedVenueIds.length === 1 &&
@@ -918,7 +946,12 @@ export default function SapfBookingForm({
     addUniqueMissing(missingSubmitItems, "Personnel-in-charge");
   }
   if (!approvalComplete) {
-    if (!selectedAdviserId) addUniqueMissing(missingSubmitItems, "Adviser");
+    if (initialRouteTarget === "ADVISER" && !selectedAdviserId) {
+      addUniqueMissing(missingSubmitItems, "Adviser");
+    }
+    if (initialRouteTarget === "DEAN" && !selectedDeanId) {
+      addUniqueMissing(missingSubmitItems, "Dean");
+    }
     if (hasMissingChainOptions) {
       missingChainLabels.forEach((label) =>
         addUniqueMissing(missingSubmitItems, `Approver: ${label}`),
@@ -968,8 +1001,12 @@ export default function SapfBookingForm({
       {selectedVenueIds.map((venueId) => (
         <input key={venueId} type="hidden" name="venueIds" value={venueId} />
       ))}
+      <input type="hidden" name="initialRouteTarget" value={initialRouteTarget} />
       {selectedAdviserId && (
         <input type="hidden" name="adviserId" value={selectedAdviserId} />
+      )}
+      {selectedDeanId && (
+        <input type="hidden" name="initialDeanId" value={selectedDeanId} />
       )}
 
       <div className="sticky top-14 z-30 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur lg:top-4">
@@ -1045,7 +1082,9 @@ export default function SapfBookingForm({
             <p className="mt-1 text-sm font-medium text-foreground">
               {isSdsEditor
                 ? "Save changes. Officer, passed reviewers get update."
-                : "Adviser reviews first after submit."}
+                : initialRouteTarget === "DEAN"
+                  ? "Dean reviews first after submit."
+                  : "Adviser reviews first after submit."}
             </p>
           </div>
         </div>
@@ -1950,8 +1989,8 @@ export default function SapfBookingForm({
         <CardHeader>
           <CardTitle>Routing & Decisions</CardTitle>
           <CardDescription>
-            Select the adviser who reviews first. After adviser approval, SDS
-            decides whether to finalize or route the request to another office.
+            Choose whether the request starts with adviser review or goes
+            directly to Dean review.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1967,6 +2006,46 @@ export default function SapfBookingForm({
               </div>
             </div>
           )}
+          <div className="grid gap-3 md:grid-cols-2">
+            {[
+              {
+                value: "ADVISER" as const,
+                title: "Start with Adviser",
+                description: "Adviser can send it to Dean or straight to SDS.",
+              },
+              {
+                value: "DEAN" as const,
+                title: "Skip Adviser",
+                description: "Dean reviews first, then hands off to SDS.",
+              },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                disabled={lockApprovalChain}
+                onClick={() => selectInitialRouteTarget(option.value)}
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  initialRouteTarget === option.value
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-background hover:bg-muted"
+                } ${lockApprovalChain ? "cursor-not-allowed opacity-60" : ""}`}
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <span
+                    className={`h-3 w-3 rounded-full border ${
+                      initialRouteTarget === option.value
+                        ? "border-primary bg-primary"
+                        : "border-border"
+                    }`}
+                  />
+                  {option.title}
+                </span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {option.description}
+                </span>
+              </button>
+            ))}
+          </div>
           <div>
             <Label>Adviser</Label>
             <Popover
@@ -1977,7 +2056,11 @@ export default function SapfBookingForm({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={lockApprovalChain || adviserOptions.length === 0}
+                  disabled={
+                    lockApprovalChain ||
+                    initialRouteTarget !== "ADVISER" ||
+                    adviserOptions.length === 0
+                  }
                   className="mt-1 h-auto min-h-11 w-full justify-between px-3 py-2 text-left font-normal"
                 >
                   <span className="truncate">{adviserSummary}</span>
@@ -2047,12 +2130,53 @@ export default function SapfBookingForm({
               </p>
             )}
           </div>
+          <div>
+            <Label htmlFor="initial-dean">Dean</Label>
+            <Select
+              value={selectedDeanId}
+              onValueChange={setSelectedDeanId}
+              disabled={
+                lockApprovalChain ||
+                initialRouteTarget !== "DEAN" ||
+                deanOptions.length === 0
+              }
+            >
+              <SelectTrigger id="initial-dean" className="mt-1 w-full">
+                <SelectValue placeholder={deanSummary} />
+              </SelectTrigger>
+              <SelectContent>
+                {deanOptions.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    <div className="flex flex-col">
+                      <span>{userNameWithTitle(user)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {user.email}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedDean && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Badge variant="secondary" className="gap-1 rounded-md py-1">
+                  {userNameWithTitle(selectedDean)}
+                </Badge>
+              </div>
+            )}
+            {missingDeanOptions && (
+              <p className="mt-2 text-xs text-destructive">
+                No active deans are configured. Ask a super admin to assign a
+                dean before submitting.
+              </p>
+            )}
+          </div>
           <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
             <p className="font-semibold text-foreground">After submission</p>
             <p className="mt-1">
-              Adviser review starts the request. SDS receives the next decision
-              and can approve directly, route to another reviewer, or send it
-              to the University President for final approval.
+              {initialRouteTarget === "DEAN"
+                ? "Dean review starts the request. After Dean approval, SDS receives the decision."
+                : "Adviser review starts the request. Adviser can send it to Dean or skip Dean and send it straight to SDS."}
             </p>
           </div>
         </CardContent>
