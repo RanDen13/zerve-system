@@ -1603,10 +1603,6 @@ function part6Changes(existing: any, data: FormData) {
 
 async function buildApprovalChain(data: FormData) {
   const adviserId = field(data, "adviserId");
-  const budgetRequested = requestNeedsBudgetSignatory(data);
-  const requestedAdditionalSignatoryIds = [
-    ...new Set(data.getAll("additionalSignatoryIds").map(String).filter(Boolean)),
-  ];
 
   if (!adviserId) {
     throw new Error("Please select an adviser before submitting.");
@@ -1651,81 +1647,6 @@ async function buildApprovalChain(data: FormData) {
       finalizesRequest: false,
     },
   ];
-
-  for (const position of requiredFixedPositions) {
-    const match = await getFirstActiveApprover(position);
-    if (!match) {
-      throw new Error(
-        `No active approver is configured for ${position.replaceAll("_", " ")}.`,
-      );
-    }
-
-    steps.push({
-      id: uuid(),
-      stepOrder: steps.length + 1,
-      position,
-      label: approverPositionLabel(position),
-      reviewerId: match.userId,
-      status: "PENDING",
-    });
-  }
-
-  if (requestedAdditionalSignatoryIds.length > 0) {
-    const insertAt = steps.findIndex((step) => step.position === "VPAA");
-    const additionalAssignments = await prisma.approverPositionUser.findMany({
-      where: {
-        userId: { in: requestedAdditionalSignatoryIds },
-        position: "ADDITIONAL_SIGNATORY" as any,
-        active: true,
-        user: {
-          banned: { not: true },
-          role: { in: approverRoleValues as any },
-        },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            accounts: {
-              where: { providerId: "credential" },
-              select: { title: true },
-            },
-          },
-        },
-      },
-    });
-    const additionalUsers = requestedAdditionalSignatoryIds
-      .map(
-        (userId) =>
-          additionalAssignments.find((item) => item.userId === userId)?.user,
-      )
-      .filter((user): user is NonNullable<typeof user> => Boolean(user));
-
-    if (additionalUsers.length !== requestedAdditionalSignatoryIds.length) {
-      throw new Error("One or more additional signatories are no longer active.");
-    }
-
-    const filteredAdditionalUsers = additionalUsers.filter((user) =>
-      budgetRequested ? true : !isFinanceApproverUser(user),
-    );
-
-    const additionalSteps = filteredAdditionalUsers.map((user) => ({
-      id: uuid(),
-      stepOrder: 0,
-      position: "ADDITIONAL_SIGNATORY",
-      label: `Additional Signatory - ${user.name}`,
-      reviewerId: user.id,
-      status: "PENDING",
-    }));
-
-    steps.splice(insertAt, 0, ...additionalSteps);
-    steps.forEach((step, index) => {
-      step.stepOrder = index + 1;
-      step.status = index === 0 ? "ACTIVE" : "PENDING";
-    });
-  }
 
   return steps;
 }
@@ -4348,15 +4269,6 @@ export async function reviewSapfRequest(
       );
       if (hasLiveScheduleConflict(conflict)) {
         throw new Error(conflictMessage(conflict));
-      }
-
-      await tx.approvalStep.update({
-        where: { id: step.id },
-      if (selectedDeanId && deanStep) {
-        await tx.approvalStep.update({
-          where: { id: deanStep.id },
-          data: { reviewerId: selectedDeanId },
-        });
       }
 
       const claimedStep = await tx.approvalStep.updateMany({
