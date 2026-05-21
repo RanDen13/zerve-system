@@ -68,6 +68,14 @@ import { formatSapfDate, formatSapfTime } from "./sapfSchedule";
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const APPROVAL_TIMEOUT_DAYS = 3;
+const ROUTE_TARGET_OPTIONS = [
+  { value: "DEAN", label: "Dean" },
+  { value: "SAS", label: "SAS" },
+  { value: "ADDITIONAL_SIGNATORY", label: "Additional Signatory" },
+  { value: "VPAA_ASSISTANT", label: "VPAA Assistant" },
+  { value: "VPAA", label: "VPAA" },
+  { value: "UNIVERSITY_PRESIDENT", label: "University President" },
+] as const;
 
 type SapfWeatherDay = {
   date: string;
@@ -98,6 +106,16 @@ function ButtonSpinner() {
 function formatFileSize(bytes: number) {
   if (!bytes) return "0 MB";
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function routePositionLabel(position?: string | null) {
+  return (
+    ROUTE_TARGET_OPTIONS.find((option) => option.value === position)?.label ||
+    String(position || "")
+      .replaceAll("_", " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase())
+  );
 }
 
 function formatDateRange(request: any) {
@@ -281,6 +299,7 @@ export function RequestSummary({
     (step: any) => step.status === "ACTIVE",
   )?.updatedAt;
   const activeStep = requestActiveStep(request);
+  const queueLabel = routingQueueLabel(request, activeStep);
   const operationalStatus = deriveSapfOperationalStatus(request);
   const openConcernCount = (request.approvalSteps || []).filter(
     (step: any) =>
@@ -330,6 +349,7 @@ export function RequestSummary({
           {showBadges && (
             <StatusBadge status={request.status} />
           )}
+          {queueLabel && <StatusBadge label={queueLabel} tone="info" />}
           {showBadges && request.status === "APPROVED" && (
             <StatusBadge
               status={operationalStatus}
@@ -378,6 +398,16 @@ export function RequestSummary({
 
 function requestActiveStep(request: any) {
   return (request.approvalSteps || []).find((step: any) => step.status === "ACTIVE");
+}
+
+function routingQueueLabel(request: any, activeStep: any) {
+  if (request.status === "RETURNED_FOR_REVISION") return "Returned for revision";
+  if (!activeStep) return "";
+  if (activeStep.position === "SDS") return "Awaiting SDS route";
+  if (activeStep.position === "UNIVERSITY_PRESIDENT" && activeStep.finalizesRequest) {
+    return "Waiting on President";
+  }
+  return `Waiting on ${activeStep.label || "reviewer"}`;
 }
 
 function approvalDeadline(step: any) {
@@ -866,7 +896,7 @@ function ReviewControls({
 }) {
   const popup = usePopup();
   const [selectedAction, setSelectedAction] = useState<
-    "approve" | "return" | "reject" | null
+    "approve" | "route" | "return" | "reject" | null
   >(null);
   const [hasAttachments, setHasAttachments] = useState("");
   const [attachmentTotal, setAttachmentTotal] = useState(0);
@@ -875,6 +905,9 @@ function ReviewControls({
   const [submitting, setSubmitting] = useState(false);
   const [returnTemplate, setReturnTemplate] = useState("");
   const [reasonTag, setReasonTag] = useState("OTHER");
+  const [routePosition, setRoutePosition] = useState("");
+  const [routeReviewerId, setRouteReviewerId] = useState("");
+  const [routeSuggestionPosition, setRouteSuggestionPosition] = useState("");
   if (me?.role === "SUPER_ADMIN") return null;
   const step = request.approvalSteps?.find(
     (item: any) => item.status === "ACTIVE" && item.reviewerId === me.id,
@@ -897,6 +930,9 @@ function ReviewControls({
       setAttachmentTotal(0);
       setAttachmentNames([]);
       setAttachmentInputKey((key) => key + 1);
+      setRoutePosition("");
+      setRouteReviewerId("");
+      setRouteSuggestionPosition("");
       popup.showSuccess(result.message || "Review saved.");
       await onRefresh();
     } finally {
@@ -904,28 +940,54 @@ function ReviewControls({
     }
   };
 
-  const approveFormId = `approve-form-${step.id}`;
+  const isSdsStep = step.position === "SDS";
+  const isPresidentFinalStep =
+    step.position === "UNIVERSITY_PRESIDENT" &&
+    Boolean(step.finalizesRequest);
+  const reviewFormId = `review-form-${step.id}`;
+  const routeReviewerOptions = routePosition ? approvers?.[routePosition] || [] : [];
+  const routeReviewerValue =
+    routeReviewerId || (routeReviewerOptions.length === 1 ? routeReviewerOptions[0].id : "");
+  const routeReviewerRequired = routeReviewerOptions.length > 1;
+  const missingRouteOptions =
+    selectedAction === "route" &&
+    Boolean(routePosition) &&
+    routeReviewerOptions.length === 0;
   const selectedActionLabel =
     selectedAction === "approve"
-      ? "Approve request"
+      ? isSdsStep || isPresidentFinalStep
+        ? "Final approve request"
+        : "Approve request"
+      : selectedAction === "route"
+        ? routePosition === "UNIVERSITY_PRESIDENT"
+          ? "Send to President"
+          : "Route request"
       : selectedAction === "return"
         ? "Return for revision"
         : "Reject request";
   const selectedActionDescription =
     selectedAction === "approve"
-      ? "Add an optional approval comment before moving this request forward."
+      ? isSdsStep || isPresidentFinalStep
+        ? "This completes the reservation approval and locks the slot."
+        : "Approve your review and send the request to SDS for routing."
+      : selectedAction === "route"
+        ? "SDS can send this request to another reviewer or to the President for final approval."
       : selectedAction === "return"
         ? "Tell the officer what needs to be revised before this can continue."
         : "Provide the rejection reason that will be recorded on this request.";
   const selectedActionCommentLabel =
     selectedAction === "approve"
       ? "Approval comment"
+      : selectedAction === "route"
+        ? "Routing note"
       : selectedAction === "return"
         ? "Revision comment"
         : "Rejection reason";
   const selectedActionPlaceholder =
     selectedAction === "approve"
       ? "Optional approval comment"
+      : selectedAction === "route"
+        ? "Optional note for this route"
       : selectedAction === "return"
         ? "What should the officer revise?"
         : "Why is this request rejected?";
@@ -936,16 +998,10 @@ function ReviewControls({
     "Policy mismatch",
   ];
   const attachmentLimitExceeded = attachmentTotal > MAX_ATTACHMENT_BYTES;
-  const deanOptions = approvers?.DEAN || [];
-  const requiresDeanSelection =
-    step.position === "ADVISER" && selectedAction === "approve";
-  const missingDeanOptions = requiresDeanSelection && deanOptions.length === 0;
-  const nextPendingStep = request.approvalSteps?.find(
-    (item: any) => item.stepOrder > step.stepOrder && item.status === "PENDING",
-  );
-  const approveHandoffLabel = requiresDeanSelection
-    ? "Dean (selected in this action)"
-    : (nextPendingStep?.label || "Final approval");
+  const approveHandoffLabel =
+    isSdsStep || isPresidentFinalStep
+      ? "Final approval"
+      : "SDS routing decision";
 
   const yesNoField = (name: string, label: string) => (
     <div className="space-y-2">
@@ -953,7 +1009,7 @@ function ReviewControls({
       <div className="flex flex-wrap gap-4">
         <label className="inline-flex items-center gap-2 text-sm text-foreground">
           <input
-            form={approveFormId}
+            form={reviewFormId}
             type="radio"
             name={name}
             value="true"
@@ -964,7 +1020,7 @@ function ReviewControls({
         </label>
         <label className="inline-flex items-center gap-2 text-sm text-foreground">
           <input
-            form={approveFormId}
+            form={reviewFormId}
             type="radio"
             name={name}
             value="false"
@@ -1000,7 +1056,7 @@ function ReviewControls({
                   <div className="flex flex-wrap gap-4">
                     <label className="inline-flex items-center gap-2 text-sm text-foreground">
                       <input
-                        form={approveFormId}
+                        form={reviewFormId}
                         type="radio"
                         name="hasAttachments"
                         value="true"
@@ -1015,7 +1071,7 @@ function ReviewControls({
                     </label>
                     <label className="inline-flex items-center gap-2 text-sm text-foreground">
                       <input
-                        form={approveFormId}
+                        form={reviewFormId}
                         type="radio"
                         name="hasAttachments"
                         value="false"
@@ -1034,7 +1090,7 @@ function ReviewControls({
                   </div>
                   <Input
                     key={attachmentInputKey}
-                    form={approveFormId}
+                    form={reviewFormId}
                     type="file"
                     name="attachmentFiles"
                     multiple
@@ -1082,7 +1138,7 @@ function ReviewControls({
                   <div>
                     <Label>Academic Interruption Remarks</Label>
                     <Input
-                      form={approveFormId}
+                      form={reviewFormId}
                       name="academicInterruptionRemarks"
                       placeholder="Remarks"
                       className="mt-1"
@@ -1101,7 +1157,7 @@ function ReviewControls({
               <div className="rounded-md border bg-card p-3 shadow-xs">
                 <Label>Student-Personnel Ratio</Label>
                 <Input
-                  form={approveFormId}
+                  form={reviewFormId}
                   name="studentPersonnelRatio"
                   placeholder="e.g. 1:30"
                   className="mt-1"
@@ -1112,20 +1168,59 @@ function ReviewControls({
         </div>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className={`grid gap-3 ${isSdsStep ? "lg:grid-cols-5" : "lg:grid-cols-3"}`}>
         <Button
           type="button"
           className="w-full bg-emerald-600 hover:bg-emerald-700"
           onClick={() => {
             setReturnTemplate("");
             setReasonTag("OTHER");
+            setRoutePosition("");
+            setRouteReviewerId("");
+            setRouteSuggestionPosition("");
             setSelectedAction("approve");
           }}
           disabled={submitting}
         >
           <CheckCircle className="mr-2 h-4 w-4" />
-          Approve
+          {isSdsStep || isPresidentFinalStep ? "Final Approve" : "Approve"}
         </Button>
+        {isSdsStep && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setReturnTemplate("");
+                setReasonTag("OTHER");
+                setRoutePosition("");
+                setRouteReviewerId("");
+                setSelectedAction("route");
+              }}
+              disabled={submitting}
+            >
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              Route
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setReturnTemplate("");
+                setReasonTag("OTHER");
+                setRoutePosition("UNIVERSITY_PRESIDENT");
+                setRouteReviewerId("");
+                setSelectedAction("route");
+              }}
+              disabled={submitting}
+            >
+              <UserRound className="mr-2 h-4 w-4" />
+              President
+            </Button>
+          </>
+        )}
         <Button
           type="button"
           variant="outline"
@@ -1133,6 +1228,9 @@ function ReviewControls({
           onClick={() => {
             setReturnTemplate("");
             setReasonTag("OTHER");
+            setRoutePosition("");
+            setRouteReviewerId("");
+            setRouteSuggestionPosition("");
             setSelectedAction("return");
           }}
           disabled={submitting}
@@ -1147,6 +1245,9 @@ function ReviewControls({
           onClick={() => {
             setReturnTemplate("");
             setReasonTag("OTHER");
+            setRoutePosition("");
+            setRouteReviewerId("");
+            setRouteSuggestionPosition("");
             setSelectedAction("reject");
           }}
           disabled={submitting}
@@ -1165,7 +1266,7 @@ function ReviewControls({
             </CardHeader>
             <CardContent>
               <form
-                id={selectedAction === "approve" ? approveFormId : undefined}
+                id={reviewFormId}
                 action={handleReview}
                 className="space-y-4"
               >
@@ -1183,42 +1284,121 @@ function ReviewControls({
                     </p>
                   </div>
                 )}
-                {requiresDeanSelection && (
+                {selectedAction === "approve" &&
+                  !isSdsStep &&
+                  !isPresidentFinalStep && (
+                    <div className="rounded-lg border bg-muted/40 p-3">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          Optional route recommendation
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          SDS will make the routing decision. Your
+                          recommendation appears in the decision brief.
+                        </p>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="route-suggestion-position">
+                            Recommend route
+                          </Label>
+                          <Select
+                            name="routeSuggestionPosition"
+                            value={routeSuggestionPosition}
+                            onValueChange={setRouteSuggestionPosition}
+                          >
+                            <SelectTrigger id="route-suggestion-position">
+                              <SelectValue placeholder="No recommendation" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ROUTE_TARGET_OPTIONS.map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="route-suggestion-reason">
+                            Reason
+                          </Label>
+                          <Input
+                            id="route-suggestion-reason"
+                            name="routeSuggestionReason"
+                            placeholder="Why should SDS consider this route?"
+                            disabled={!routeSuggestionPosition}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                {selectedAction === "route" && (
                   <div className="rounded-lg border bg-muted/40 p-3">
                     <div className="space-y-1">
                       <p className="text-sm font-semibold text-foreground">
-                        Select the dean reviewer
+                        SDS route target
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        This assigns who will review the request after your
-                        approval.
+                        Choose the reviewer who should receive this request
+                        next. President routing is treated as final approval.
                       </p>
                     </div>
-                    {missingDeanOptions ? (
-                      <p className="mt-3 text-xs text-destructive">
-                        No active dean accounts are configured. Ask a super
-                        admin to assign a dean position before approving.
-                      </p>
-                    ) : (
-                      <div className="mt-3">
-                        <Label htmlFor="dean-select">Dean</Label>
-                        <Select name="deanId" required>
-                          <SelectTrigger
-                            id="dean-select"
-                            className="mt-2 w-full"
-                          >
-                            <SelectValue placeholder="Select dean" />
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="route-position">Route to</Label>
+                        <Select
+                          name="routePosition"
+                          value={routePosition}
+                          onValueChange={(value) => {
+                            setRoutePosition(value);
+                            setRouteReviewerId("");
+                          }}
+                          required
+                        >
+                          <SelectTrigger id="route-position">
+                            <SelectValue placeholder="Select route" />
                           </SelectTrigger>
                           <SelectContent>
-                            {deanOptions.map((dean: any) => (
-                              <SelectItem key={dean.id} value={dean.id}>
+                            {ROUTE_TARGET_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="route-reviewer">Reviewer</Label>
+                        <Select
+                          name="routeReviewerId"
+                          value={routeReviewerValue}
+                          onValueChange={setRouteReviewerId}
+                          required={routeReviewerRequired}
+                          disabled={!routePosition || routeReviewerOptions.length === 0}
+                        >
+                          <SelectTrigger id="route-reviewer">
+                            <SelectValue
+                              placeholder={
+                                routePosition
+                                  ? "Use assigned reviewer"
+                                  : "Select route first"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {routeReviewerOptions.map((reviewer: any) => (
+                              <SelectItem key={reviewer.id} value={reviewer.id}>
                                 <div className="flex flex-col">
                                   <span className="text-sm font-medium">
-                                    {dean.name}
+                                    {reviewer.name}
                                   </span>
-                                  {dean.title && (
+                                  {reviewer.title && (
                                     <span className="text-xs text-muted-foreground">
-                                      {dean.title}
+                                      {reviewer.title}
                                     </span>
                                   )}
                                 </div>
@@ -1226,12 +1406,18 @@ function ReviewControls({
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          {deanOptions.length} dean
-                          {deanOptions.length === 1 ? "" : "s"} available.
-                        </p>
+                        {missingRouteOptions ? (
+                          <p className="text-xs text-destructive">
+                            No active {routePositionLabel(routePosition)} account
+                            is configured.
+                          </p>
+                        ) : routePosition === "UNIVERSITY_PRESIDENT" ? (
+                          <p className="text-xs text-muted-foreground">
+                            President approval will complete the request.
+                          </p>
+                        ) : null}
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
                 {selectedAction === "return" && (
@@ -1284,7 +1470,9 @@ function ReviewControls({
                         ? `${returnTemplate}: add required revisions`
                         : selectedActionPlaceholder
                     }
-                    required={selectedAction !== "approve"}
+                    required={
+                      selectedAction === "return" || selectedAction === "reject"
+                    }
                     rows={4}
                     defaultValue={
                       selectedAction === "return" && returnTemplate
@@ -1306,8 +1494,13 @@ function ReviewControls({
                     type="submit"
                     disabled={
                       submitting ||
-                      (selectedAction === "approve" && attachmentLimitExceeded) ||
-                      missingDeanOptions
+                      ((selectedAction === "approve" ||
+                        selectedAction === "route") &&
+                        attachmentLimitExceeded) ||
+                      (selectedAction === "route" &&
+                        (!routePosition ||
+                          missingRouteOptions ||
+                          (routeReviewerRequired && !routeReviewerValue)))
                     }
                     variant={
                       selectedAction === "reject" ? "destructive" : "default"

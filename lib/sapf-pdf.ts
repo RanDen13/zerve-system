@@ -652,7 +652,7 @@ async function renderDataBackedPdf({
 
   const footerPages = pdf.getPages();
   footerPages.forEach((page, index) => {
-    page.drawText(`Zerve SAPF ${mode} document - Page ${index + 1}`, {
+    page.drawText(`UniSpace SAPF ${mode} document - Page ${index + 1}`, {
       x: marginX,
       y: 24,
       size: 8,
@@ -772,7 +772,7 @@ async function appendVerificationPage({
   const qrData = await QRCode.toDataURL(verifyUrl, { margin: 1, width: 220 });
   const qrImage = await pdf.embedPng(qrData);
 
-  verifyPage.drawText("Zerve Verification", {
+  verifyPage.drawText("UniSpace Verification", {
     x: 48,
     y: 720,
     size: 18,

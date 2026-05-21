@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Zerve",
+  title: "UniSpace",
   description:
     "Officer-only venue reservation and approval workflow for La Consolacion University Philippines.",
   icons: {

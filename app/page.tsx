@@ -45,9 +45,9 @@ const staggerContainer = {
 const workflowSteps = [
   "Open and create request",
   "Fill up the information",
-  "Submit your request for approval",
-  "Wait for approval",
-  "SDS clears requirements",
+  "Submit to adviser review",
+  "SDS routes or finalizes",
+  "Track every decision",
 ];
 
 const features = [
@@ -68,9 +68,9 @@ const features = [
     bg: "bg-emerald-500/25",
   },
   {
-    title: "Approval Progress",
+    title: "Routing Progress",
     description:
-      "Follow every required reviewer from adviser through university president with clear status markers.",
+      "Follow the active reviewer, SDS routing decisions, and final approval status without guessing the next office.",
     icon: CheckCircle,
     color: "text-indigo-100",
     bg: "bg-indigo-500/25",
@@ -117,52 +117,23 @@ const approvalChain = [
     chip: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   {
-    title: "Dean",
-    detail: "Selected during flow when dean approval is required.",
-    tag: "Conditional",
-    accent: "from-blue-400 to-indigo-300",
-    chip: "bg-blue-500/15 text-blue-700 dark:text-blue-200",
-  },
-  {
     title: "SDS / Admin",
-    detail: "Core clearance gate and SDS-controlled decisions.",
+    detail: "Central routing desk: finalize directly or route to the right office.",
     tag: "Required",
     accent: "from-amber-400 to-orange-300",
     chip: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
   {
-    title: "SAS",
-    detail: "Student affairs validation in approval sequence.",
-    tag: "Required",
+    title: "Optional Reviewers",
+    detail: "Dean, SAS, VPAA, VP Finance, or another signatory can be added by SDS only when needed.",
+    tag: "SDS-routed",
     accent: "from-cyan-400 to-blue-300",
     chip: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-200",
   },
   {
-    title: "Additional Signatories",
-    detail:
-      "Optional extra reviewers such as VP Finance when budget support is requested.",
-    tag: "Optional",
-    accent: "from-fuchsia-400 to-rose-300",
-    chip: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-200",
-  },
-  {
-    title: "VPAA Assistant",
-    detail: "Academic affairs assistant prepares the request for VPAA review.",
-    tag: "Required",
-    accent: "from-violet-400 to-indigo-300",
-    chip: "bg-violet-500/15 text-violet-700 dark:text-violet-200",
-  },
-  {
-    title: "VPAA",
-    detail: "Vice President for Academic Affairs gives final academic review.",
-    tag: "Required",
-    accent: "from-indigo-400 to-blue-300",
-    chip: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
-  },
-  {
-    title: "University President",
-    detail: "Final executive approval before the request moves to completion.",
-    tag: "Final approver",
+    title: "President",
+    detail: "Optional final approval when SDS decides executive approval is required.",
+    tag: "Optional final",
     accent: "from-yellow-300 to-amber-400",
     chip: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-200",
   },
@@ -241,20 +212,20 @@ export default function Home() {
               className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200 backdrop-blur"
             >
               <AppLogo className="h-4 w-4 shrink-0" variant="light" />
-              <span>Zerve</span>
+              <span>UniSpace</span>
             </motion.p>
             <motion.h1
               variants={fadeInUp}
               className="max-w-4xl text-5xl font-bold leading-[0.98] tracking-normal sm:text-6xl lg:text-8xl"
             >
-              Reserve campus venues. Track approvals end-to-end.
+              Reserve campus venues. Route approvals clearly.
             </motion.h1>
             <motion.p
               variants={fadeInUp}
               className="mx-auto mt-8 max-w-2xl text-xl font-medium leading-9 text-white/85 lg:mx-0"
             >
               Check venue availability, submit requests, and follow every
-              approver step until SDS clearance.
+              routing decision until the reservation is cleared.
             </motion.p>
             <motion.div
               variants={fadeInUp}
@@ -283,7 +254,7 @@ export default function Home() {
                 href="#approval-chain"
                 className="inline-flex items-center gap-2 text-base font-medium text-white/85 underline-offset-4 transition hover:text-white hover:underline"
               >
-                View full approval chain
+                View routing model
               </Link>
             </motion.div>
             <motion.div
@@ -322,7 +293,7 @@ export default function Home() {
                 <div>
                   <p className="text-xl font-semibold">Reservation Request Flow</p>
                   <p className="text-base text-white/60">
-                    Guided request and approval steps
+                    Guided request and routing steps
                   </p>
                 </div>
               </div>
@@ -374,7 +345,7 @@ export default function Home() {
           <div className="flex items-center gap-4 border-t p-4 sm:border-l sm:border-t-0">
             <CheckCircle className="h-9 w-9 text-indigo-700 dark:text-indigo-200" />
             <div>
-              <p className="text-3xl font-bold">Approval</p>
+              <p className="text-3xl font-bold">Routing</p>
               <p className="text-base text-muted-foreground">
                 End-to-end progress
               </p>
@@ -398,15 +369,15 @@ export default function Home() {
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="mb-3 text-xs font-bold uppercase tracking-[0.28em] text-sky-700 dark:text-sky-300">
-                Approval Map
+                Routing Map
               </p>
               <h3 className="text-4xl font-bold tracking-normal sm:text-5xl">
-                Full approval chain
+                SDS-controlled routing
               </h3>
               <p className="mt-3 max-w-3xl text-lg text-muted-foreground">
-                Swipe on touch devices or use arrows to view full sequence:
-                officer, adviser, dean, SDS, SAS, optional signatories, VPAA
-                Assistant, VPAA, and University President.
+                Swipe on touch devices or use arrows to view how requests move:
+                officer submission, adviser review, SDS routing, optional
+                reviewers, optional President final approval, and completion.
               </p>
             </div>
             <div className="hidden items-center gap-2 md:flex">
@@ -415,7 +386,7 @@ export default function Home() {
                 size="icon"
                 variant="outline"
                 onClick={() => scrollApprovalChain("left")}
-                aria-label="Scroll approval chain left"
+                aria-label="Scroll routing map left"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -424,7 +395,7 @@ export default function Home() {
                 size="icon"
                 variant="outline"
                 onClick={() => scrollApprovalChain("right")}
-                aria-label="Scroll approval chain right"
+                aria-label="Scroll routing map right"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -463,9 +434,9 @@ export default function Home() {
             ))}
           </div>
           <div className="mt-4 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4 text-sm text-muted-foreground">
-            VP Finance is not a separate fixed stage. It appears inside
-            Additional Signatories only when budget support is requested, and
-            the officer can still remove it before submission.
+            VP Finance is no longer chosen by the officer. Budget support makes
+            the need visible, then SDS decides whether Finance review belongs in
+            the route.
           </div>
         </motion.div>
       </section>
@@ -489,7 +460,7 @@ export default function Home() {
             transition={{ duration: 0.5 }}
           >
             <h2 className="text-4xl font-bold tracking-normal text-white sm:text-5xl">
-              Built around the Zerve approval workflow.
+              Built around practical SDS-controlled routing.
             </h2>
             <p className="mt-3 text-xl text-white/75">
               The system supports practical reservation work: venue scheduling,
@@ -541,7 +512,7 @@ export default function Home() {
             Ready to manage your venue reservation?
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-xl text-white/70">
-            Sign in with your Zerve account or check the public calendar before
+            Sign in with your UniSpace account or check the public calendar before
             planning your activity.
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
@@ -572,14 +543,14 @@ export default function Home() {
               {isLoggedIn ? "Dashboard" : "Login"}
             </Link>
             <Link className="transition hover:text-foreground" href="#approval-chain">
-              Approval chain
+              Routing model
             </Link>
             <Link className="transition hover:text-foreground" href="/login">
               Help and support
             </Link>
           </div>
           <p className="text-muted-foreground">
-            Copyright 2026 La Consolacion University Philippines. Zerve.
+            Copyright 2026 La Consolacion University Philippines. UniSpace.
           </p>
         </div>
       </footer>

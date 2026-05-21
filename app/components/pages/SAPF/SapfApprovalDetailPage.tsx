@@ -43,6 +43,7 @@ import SapfPageLoading from "./SapfPageLoading";
 import {
   ConcernThreads,
   RequestDetail,
+  routePositionLabel,
   SapfActivityLog,
 } from "./SapfRequestDetail";
 
@@ -185,6 +186,9 @@ export default function SapfApprovalDetailPage({
     (item: any) => item.status === "PENDING",
   );
   const hasPendingOfficerRequests = pendingOfficerRequests.length > 0;
+  const suggestedRouteLabel = request.suggestedRoutePosition
+    ? routePositionLabel(request.suggestedRoutePosition)
+    : "";
   const returnLoopCount = (request.activityLogs || []).filter(
     (log: any) => log.action === "RETURNED",
   ).length;
@@ -354,6 +358,20 @@ export default function SapfApprovalDetailPage({
           </div>
         </CardContent>
       </Card>
+      {suggestedRouteLabel && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader>
+            <CardTitle>Route Recommendation</CardTitle>
+            <CardDescription>
+              {request.suggestedRouteBy?.name || "Reviewer"} recommended{" "}
+              {suggestedRouteLabel}
+              {request.suggestedRouteReason
+                ? `: ${request.suggestedRouteReason}`
+                : "."}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
       {returnLoopCount >= 3 && (
         <Card className="border-amber-500/30 bg-amber-500/10">
           <CardHeader>
@@ -458,7 +476,7 @@ export default function SapfApprovalDetailPage({
             <CardHeader>
               <CardTitle>Cancel Booking</CardTitle>
               <CardDescription>
-                SDS cancellation stops the approval flow and releases the slot.
+                SDS cancellation stops routing and releases the slot.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

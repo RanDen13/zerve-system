@@ -38,9 +38,9 @@ function genericEmailLayout({
             <tr>
               <td style="padding:0;background:linear-gradient(135deg,#064e3b 0%,#0f766e 45%,#2563eb 100%);">
                 <div style="padding:28px 32px 42px;">
-                  <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#d1fae5;font-weight:800;">Zerve Notification</div>
+                  <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#d1fae5;font-weight:800;">UniSpace Notification</div>
                   <h1 style="margin:18px 0 0;color:#ffffff;font-size:30px;line-height:1.18;font-weight:850;">${escapeHtml(subject)}</h1>
-                  <p style="margin:14px 0 0;color:#dbeafe;font-size:15px;line-height:1.65;">${escapeHtml(lines[0] || "You have a new update from Zerve.")}</p>
+                  <p style="margin:14px 0 0;color:#dbeafe;font-size:15px;line-height:1.65;">${escapeHtml(lines[0] || "You have a new update from UniSpace.")}</p>
                 </div>
               </td>
             </tr>
@@ -58,7 +58,7 @@ function genericEmailLayout({
             </tr>
             <tr>
               <td style="padding:18px 32px 34px;">
-                <p style="margin:0;color:#64748b;font-size:12px;line-height:1.55;">This is an automated notification from Zerve. Please do not reply directly to this email.</p>
+                <p style="margin:0;color:#64748b;font-size:12px;line-height:1.55;">This is an automated notification from UniSpace. Please do not reply directly to this email.</p>
               </td>
             </tr>
           </table>
@@ -89,7 +89,7 @@ export async function sendEmail(
     process.env.SENDER_PASSWORD;
   const senderEmail = settings.senderEmail || process.env.SENDER_EMAIL || user;
   const senderName =
-    settings.senderName || process.env.SENDER_NAME || "Zerve";
+    settings.senderName || process.env.SENDER_NAME || "UniSpace";
 
   if (!host || !port || !user || !pass || !senderEmail) {
     if (process.env.NODE_ENV !== "production") {

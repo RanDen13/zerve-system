@@ -147,11 +147,11 @@ export const auth = betterAuth({
       const resetUrl = new URL("/reset-password", appUrl);
       resetUrl.searchParams.set("token", token);
       const html = authEmailLayout({
-        preview: "Reset your Zerve password.",
+        preview: "Reset your UniSpace password.",
         eyebrow: "Password Recovery",
         headline: "Create a new password",
         message:
-          "We received a request to reset your Zerve password. Use the secure link below to choose a new one.",
+          "We received a request to reset your UniSpace password. Use the secure link below to choose a new one.",
         badge: "Reset Password",
         tone: "success",
         rows: [
@@ -165,11 +165,11 @@ export const auth = betterAuth({
       });
       const sent = await sendEmail(
         user.email,
-        "Reset your Zerve password",
+        "Reset your UniSpace password",
         [
           `Hi ${user.name || "there"},`,
           "",
-          "Use this link to create a new Zerve password:",
+          "Use this link to create a new UniSpace password:",
           resetUrl.toString(),
           "",
           "This link expires in 1 hour. If you did not request this, ignore this email.",
@@ -209,11 +209,11 @@ export const auth = betterAuth({
       sendMagicLink: async ({ email, token, url }) => {
         const formattedCode = formatMagicCode(token);
         const html = authEmailLayout({
-          preview: `Your Zerve magic code is ${formattedCode}.`,
+          preview: `Your UniSpace magic code is ${formattedCode}.`,
           eyebrow: "Secure Sign In",
           headline: "Your magic code is ready",
           message:
-            "Use this one-time code to continue signing in to your Zerve account, or open the secure sign-in link below.",
+            "Use this one-time code to continue signing in to your UniSpace account, or open the secure sign-in link below.",
           badge: "Magic Code",
           rows: [
             ["Email", escapeHtml(email)],
@@ -230,9 +230,9 @@ export const auth = betterAuth({
         });
         const sent = await sendEmail(
           email,
-          "Your Zerve magic code",
+          "Your UniSpace magic code",
           [
-            "Use this magic code to sign in to Zerve:",
+            "Use this magic code to sign in to UniSpace:",
             "",
             formattedCode,
             "",

@@ -105,7 +105,7 @@ export default function SystemSettingsPage({
       return;
     }
 
-    window.dispatchEvent(new Event("zerve:start-tutorial"));
+    window.dispatchEvent(new Event("unispace:start-tutorial"));
   };
 
   return (
@@ -294,7 +294,7 @@ export default function SystemSettingsPage({
                   <Input
                     id="senderName"
                     name="senderName"
-                    placeholder="Zerve"
+                    placeholder="UniSpace"
                     autoComplete="name"
                     defaultValue={initialSettings.senderName}
                   />

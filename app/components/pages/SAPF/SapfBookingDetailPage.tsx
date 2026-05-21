@@ -608,7 +608,7 @@ export default function SapfBookingDetailPage({
               <CardDescription>
                 {cancelNeedsSdsApproval
                   ? "This booking has reached SDS, so cancellation needs SDS approval before the slot is released."
-                  : "This will stop the approval flow and release the slot."}
+                  : "This will stop routing and release the slot."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

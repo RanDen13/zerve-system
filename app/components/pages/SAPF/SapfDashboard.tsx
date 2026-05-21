@@ -153,7 +153,7 @@ export default function SapfDashboard() {
           {
             href: "/user/bookings/create",
             title: "Start new request",
-            description: "Build reservation, save draft, then submit into approval flow.",
+            description: "Build reservation, save draft, then submit to adviser and SDS routing.",
             icon: <CirclePlus className="h-5 w-5" />,
           },
           {
@@ -216,7 +216,7 @@ export default function SapfDashboard() {
             description={
               isOfficer
                 ? "Drafts, submitted, and revision items still moving"
-                : "Requests still moving through workflow near you"
+                : "Requests still moving through routing near you"
             }
             href="/user/bookings"
             actionLabel="Open"
@@ -296,12 +296,12 @@ export default function SapfDashboard() {
             {isOfficer ? (
               <>
                 <p>1 pending item usually means draft, active review, or revision request.</p>
-                <p>Open active request detail to see exact stage, current reviewer, and allowed actions.</p>
+                <p>Open the request detail to see the current reviewer, SDS route, and allowed actions.</p>
               </>
             ) : (
               <>
                 <p>Pending approvals count shows requests waiting for your direct action.</p>
-                <p>Following requests stay visible even when another reviewer owns current step.</p>
+                <p>Following requests stay visible even when SDS routes them to another reviewer.</p>
               </>
             )}
           </CardContent>
@@ -360,14 +360,14 @@ export default function SapfDashboard() {
           </CardTitle>
           <CardDescription>
             {currentRequests.length} active request
-            {currentRequests.length === 1 ? "" : "s"} in the approval flow.
+            {currentRequests.length === 1 ? "" : "s"} in routing.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {currentRequests.length === 0 ? (
             <EmptyState
               title="No active requests"
-              description="There are no venue reservations currently moving through the approval flow."
+              description="There are no venue reservations currently moving through routing."
               action={
                 workspace.me.role === "OFFICER" ? (
                   <Button asChild>

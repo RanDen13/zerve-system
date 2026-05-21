@@ -39,6 +39,7 @@ model User {
   createdEquipmentItems     EquipmentItem[]        @relation("EquipmentItemCreator")
   providedEquipmentRequests SAPFEquipmentRequest[] @relation("EquipmentProvidedBy")
   returnedEquipmentRequests SAPFEquipmentRequest[] @relation("EquipmentReturnedBy")
+  suggestedRouteRequests    SAPFRequest[]          @relation("RouteSuggestionActor")
 
   @@map("user")
 }
@@ -157,6 +158,10 @@ model SAPFRequest {
   conductedRemarks            String?
   cancelledRemarks            String?
   verificationToken           String?                 @unique
+  suggestedRoutePosition      ApproverPosition?
+  suggestedRouteReason        String?
+  suggestedRouteById          String?
+  suggestedRouteAt            DateTime?
   approvedAt                  DateTime?
   completedAt                 DateTime?
   createdAt                   DateTime                @default(now())
@@ -171,6 +176,7 @@ model SAPFRequest {
   coreValues                  SAPFCoreValue[]
   graduateAttributes          SAPFGraduateAttribute[]
   officer                     User                    @relation("OfficerRequests", fields: [officerId], references: [id], onDelete: Cascade)
+  suggestedRouteBy            User?                   @relation("RouteSuggestionActor", fields: [suggestedRouteById], references: [id], onDelete: SetNull)
   schedules                   SAPFRequestSchedule[]
   venues                      SAPFRequestVenue[]
   supportRequests             SAPFSupportRequest[]
@@ -179,6 +185,7 @@ model SAPFRequest {
   @@index([officerId])
   @@index([status])
   @@index([operationalStatus])
+  @@index([suggestedRouteById])
   @@map("sapf_request")
 }
 
@@ -310,6 +317,7 @@ model ApprovalStep {
   label         String
   reviewerId    String
   status        ApprovalStepStatus @default(PENDING)
+  finalizesRequest Boolean          @default(false)
   comment       String?
   actedAt       DateTime?
   createdAt     DateTime           @default(now())
@@ -523,7 +531,7 @@ model SystemSettings {
   smtpUser    String   @default("")
   smtpPass    String   @default("")
   senderEmail String   @default("")
-  senderName  String   @default("Zerve")
+  senderName  String   @default("UniSpace")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -599,6 +607,8 @@ enum ApprovalActionType {
   COMMENTED
   FINALIZED
   CANCELLED
+  ROUTED
+  RECOMMENDED_ROUTE
 }
 
 enum ApproverPosition {

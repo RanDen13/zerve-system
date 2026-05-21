@@ -56,7 +56,7 @@ export function authEmailLayout({
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                   <tr>
                     <td style="padding:28px 32px 44px;">
-                      <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#d1fae5;font-weight:800;">Zerve Account Security</div>
+                      <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#d1fae5;font-weight:800;">UniSpace Account Security</div>
                       <h1 style="margin:18px 0 0;color:#ffffff;font-size:30px;line-height:1.18;font-weight:850;">${escapeHtml(headline)}</h1>
                       <p style="margin:14px 0 0;color:#dbeafe;font-size:15px;line-height:1.65;">${escapeHtml(message)}</p>
                     </td>

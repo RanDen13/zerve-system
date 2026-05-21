@@ -12,15 +12,15 @@ export default function TermsAndConditionsPrompt({
 }: {
   sessionId: string;
 }) {
-  const storageKey = `zerve:terms-accepted:${termsVersion}:${sessionId}`;
+  const storageKey = `unispace:terms-accepted:${termsVersion}:${sessionId}`;
   const accepted = useSyncExternalStore(
     (onStoreChange) => {
       window.addEventListener("storage", onStoreChange);
-      window.addEventListener("zerve-terms-accepted", onStoreChange);
+      window.addEventListener("unispace-terms-accepted", onStoreChange);
 
       return () => {
         window.removeEventListener("storage", onStoreChange);
-        window.removeEventListener("zerve-terms-accepted", onStoreChange);
+        window.removeEventListener("unispace-terms-accepted", onStoreChange);
       };
     },
     () => localStorage.getItem(storageKey) === "true",
@@ -29,7 +29,7 @@ export default function TermsAndConditionsPrompt({
 
   function acceptTerms() {
     localStorage.setItem(storageKey, "true");
-    window.dispatchEvent(new Event("zerve-terms-accepted"));
+    window.dispatchEvent(new Event("unispace-terms-accepted"));
   }
 
   if (accepted) return null;
@@ -44,14 +44,14 @@ export default function TermsAndConditionsPrompt({
           <div className="min-w-0">
             <h2 className="text-xl font-semibold">Terms and Conditions</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Please review and accept these terms to continue using Zerve.
+              Please review and accept these terms to continue using UniSpace.
             </p>
           </div>
         </div>
 
         <div className="max-h-[52vh] space-y-4 overflow-y-auto px-6 py-5 text-sm leading-6 text-muted-foreground">
           <p>
-            By using Zerve, you agree to provide accurate reservation,
+            By using UniSpace, you agree to provide accurate reservation,
             account, and activity information. Requests, uploaded files,
             approvals, comments, and schedules must be related to legitimate
             university reservation workflows.

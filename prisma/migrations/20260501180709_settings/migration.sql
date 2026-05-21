@@ -6,7 +6,7 @@ CREATE TABLE "system_settings" (
     "smtpUser" TEXT NOT NULL DEFAULT '',
     "smtpPass" TEXT NOT NULL DEFAULT '',
     "senderEmail" TEXT NOT NULL DEFAULT '',
-    "senderName" TEXT NOT NULL DEFAULT 'Zerve',
+    "senderName" TEXT NOT NULL DEFAULT 'UniSpace',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );

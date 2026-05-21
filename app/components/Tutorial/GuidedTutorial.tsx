@@ -49,7 +49,7 @@ type TargetRect = {
 };
 
 const TERMS_VERSION = "2026-05";
-const START_EVENT = "zerve:start-tutorial";
+const START_EVENT = "unispace:start-tutorial";
 
 const commonClosingSteps: TutorialStep[] = [
   {
@@ -311,7 +311,7 @@ export default function GuidedTutorial({
     const target = findVisibleTarget(step.selector);
     if (!target) {
       if (window.innerWidth < 1024) {
-        window.dispatchEvent(new Event("zerve:open-sidebar"));
+        window.dispatchEvent(new Event("unispace:open-sidebar"));
       }
       setTargetRect(null);
       return;
@@ -345,7 +345,7 @@ export default function GuidedTutorial({
   useEffect(() => {
     if (!shouldAutoStart || autoStartedRef.current) return;
 
-    const storageKey = `zerve:terms-accepted:${TERMS_VERSION}:${sessionId}`;
+    const storageKey = `unispace:terms-accepted:${TERMS_VERSION}:${sessionId}`;
     const startWhenReady = () => {
       let accepted = true;
       try {
@@ -360,10 +360,10 @@ export default function GuidedTutorial({
     };
 
     startWhenReady();
-    window.addEventListener("zerve-terms-accepted", startWhenReady);
+    window.addEventListener("unispace-terms-accepted", startWhenReady);
 
     return () =>
-      window.removeEventListener("zerve-terms-accepted", startWhenReady);
+      window.removeEventListener("unispace-terms-accepted", startWhenReady);
   }, [beginTutorial, sessionId, shouldAutoStart]);
 
   useEffect(() => {

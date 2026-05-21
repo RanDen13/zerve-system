@@ -394,7 +394,7 @@ async function sendEquipmentEmail({
             <tr>
               <td style="padding:0;background:linear-gradient(135deg,#064e3b 0%,#0f766e 45%,#2563eb 100%);">
                 <div style="padding:28px 32px 44px;">
-                  <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#d1fae5;font-weight:800;">Zerve Equipment Desk</div>
+                  <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#d1fae5;font-weight:800;">UniSpace Equipment Desk</div>
                   <h1 style="margin:18px 0 0;color:#ffffff;font-size:30px;line-height:1.18;font-weight:850;">Equipment update</h1>
                   <p style="margin:14px 0 0;color:#dbeafe;font-size:15px;line-height:1.65;">${escapeHtml(message)}</p>
                 </div>
@@ -428,8 +428,8 @@ async function sendEquipmentEmail({
             </tr>
             <tr>
               <td style="padding:24px 32px 34px;">
-                <a href="${escapeHtml(link)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;border-radius:12px;padding:14px 20px;font-size:14px;font-weight:850;">Open in Zerve</a>
-                <p style="margin:18px 0 0;color:#64748b;font-size:12px;line-height:1.55;">This is an automated equipment notification from Zerve. Please do not reply directly to this email.</p>
+                <a href="${escapeHtml(link)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;border-radius:12px;padding:14px 20px;font-size:14px;font-weight:850;">Open in UniSpace</a>
+                <p style="margin:18px 0 0;color:#64748b;font-size:12px;line-height:1.55;">This is an automated equipment notification from UniSpace. Please do not reply directly to this email.</p>
               </td>
             </tr>
           </table>
@@ -1007,7 +1007,7 @@ export async function markEquipmentProvided(
     if (request.officer?.email && request.officer.emailNotificationsEnabled !== false) {
       await sendEquipmentEmail({
         to: request.officer.email,
-        subject: `[Zerve] Equipment provided for ${request.requestNumber}`,
+        subject: `[UniSpace] Equipment provided for ${request.requestNumber}`,
         message: "Requested equipment was marked as provided.",
         request,
         equipmentRows: rows,
@@ -1169,7 +1169,7 @@ export async function confirmEquipmentReturned(
     if (request.officer?.email && request.officer.emailNotificationsEnabled !== false) {
       await sendEquipmentEmail({
         to: request.officer.email,
-        subject: `[Zerve] Equipment returned for ${request.requestNumber}`,
+        subject: `[UniSpace] Equipment returned for ${request.requestNumber}`,
         message: "Your requested equipment was confirmed returned.",
         request,
         equipmentRows: rows,
@@ -1212,7 +1212,7 @@ export async function notifyProvisionersForEquipmentRequest(
       if (provisioner.email && provisioner.emailNotificationsEnabled !== false) {
         await sendEquipmentEmail({
           to: provisioner.email,
-          subject: `[Zerve] ${request.requestNumber} needs equipment`,
+          subject: `[UniSpace] ${request.requestNumber} needs equipment`,
           message: body,
           request,
           equipmentRows: rows,
@@ -1236,7 +1236,7 @@ export async function notifyOfficerEquipmentStatusOnApproval(requestId: string) 
   if (request.officer?.email && request.officer.emailNotificationsEnabled !== false) {
     await sendEquipmentEmail({
       to: request.officer.email,
-      subject: `[Zerve] Equipment pending for ${request.requestNumber}`,
+      subject: `[UniSpace] Equipment pending for ${request.requestNumber}`,
       message:
         "Your reservation is approved. Requested equipment is still pending provision.",
       request,
@@ -1265,7 +1265,7 @@ export async function notifyProvisionersForEquipmentReturn(requestId: string) {
       if (provisioner.email && provisioner.emailNotificationsEnabled !== false) {
         await sendEquipmentEmail({
           to: provisioner.email,
-          subject: `[Zerve] Equipment return requested for ${request.requestNumber}`,
+          subject: `[UniSpace] Equipment return requested for ${request.requestNumber}`,
           message: body,
           request,
           equipmentRows: rows,
@@ -1324,7 +1324,7 @@ export async function sendEquipmentDueReminders() {
         if (provisioner.email && provisioner.emailNotificationsEnabled !== false) {
           await sendEquipmentEmail({
             to: provisioner.email,
-            subject: `[Zerve] Equipment due soon for ${request.requestNumber}`,
+            subject: `[UniSpace] Equipment due soon for ${request.requestNumber}`,
             message: body,
             request,
             equipmentRows: requestRows,
@@ -1335,7 +1335,7 @@ export async function sendEquipmentDueReminders() {
       request.officer?.email && request.officer.emailNotificationsEnabled !== false
         ? sendEquipmentEmail({
             to: request.officer.email,
-            subject: `[Zerve] Equipment not yet provided for ${request.requestNumber}`,
+            subject: `[UniSpace] Equipment not yet provided for ${request.requestNumber}`,
             message: body,
             request,
             equipmentRows: requestRows,

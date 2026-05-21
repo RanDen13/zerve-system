@@ -180,7 +180,7 @@ export async function updateSystemSettings(
     const smtpUser = field(data, "smtpUser");
     const smtpPass = field(data, "smtpPass");
     const senderEmail = field(data, "senderEmail");
-    const senderName = field(data, "senderName", "Zerve");
+    const senderName = field(data, "senderName", "UniSpace");
     const resolvedSenderEmail = senderEmail || smtpUser;
 
     if (!smtpHost) {

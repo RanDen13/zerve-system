@@ -146,9 +146,9 @@ export default function Sidebar({
 
   useEffect(() => {
     const openSidebar = () => setIsMobileOpen(true);
-    window.addEventListener("zerve:open-sidebar", openSidebar);
+    window.addEventListener("unispace:open-sidebar", openSidebar);
 
-    return () => window.removeEventListener("zerve:open-sidebar", openSidebar);
+    return () => window.removeEventListener("unispace:open-sidebar", openSidebar);
   }, []);
 
   const SidebarContent = () => (
@@ -164,7 +164,7 @@ export default function Sidebar({
               <AppLogo className="h-full w-full" variant="adaptive" priority />
             </motion.div>
             <div>
-              <h2 className="text-base font-bold leading-tight">Zerve</h2>
+              <h2 className="text-base font-bold leading-tight">UniSpace</h2>
               <p className="text-xs capitalize text-muted-foreground">
                 {roleLabel(userRole)}
               </p>

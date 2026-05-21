@@ -111,18 +111,19 @@ function FlowHistoryModal({
     : [];
 
   return (
-    <ModalBase onClose={onClose} ariaLabel="Approval flow history">
+    <ModalBase onClose={onClose} ariaLabel="Routing and decision history">
       <Card className="w-[min(94vw,920px)] overflow-hidden">
         <CardHeader className="border-b">
           <div className="flex items-start justify-between gap-4">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <History className="h-5 w-5" />
-                Approval Flow History
+                Routing & Decision History
               </CardTitle>
               <CardDescription>
-                {request.requestNumber} - every approval, return, edit, and
-                system event recorded while booking moved through workflow.
+                {request.requestNumber} - every approval, route, return, edit,
+                and system event recorded while the booking moved through SDS
+                routing.
               </CardDescription>
             </div>
             <Button type="button" variant="ghost" size="icon" onClick={onClose}>
@@ -317,10 +318,10 @@ export default function ApprovalProgressTimeline({
           "block w-full overflow-x-auto rounded-md border bg-card text-left transition hover:border-primary/40 hover:bg-muted/30 focus-visible:ring-[3px] focus-visible:ring-ring/50",
           compact ? "p-3" : "p-4",
         )}
-        aria-label="Open approval flow history"
+        aria-label="Open routing and decision history"
       >
         <div className="mb-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span className="font-medium">Approval flow</span>
+          <span className="font-medium">Routing & decisions</span>
           <span className="font-semibold text-primary">Click to view history</span>
         </div>
         <div className="flex w-full" style={{ minWidth }}>

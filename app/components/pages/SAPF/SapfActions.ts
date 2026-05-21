@@ -66,10 +66,10 @@ const exclusiveApproverPositions = [
   "VPAA",
   "UNIVERSITY_PRESIDENT",
 ] as const;
-const requiredFixedPositions = [
+const routeTargetPositionValues = [
   "DEAN",
-  "SDS",
   "SAS",
+  "ADDITIONAL_SIGNATORY",
   "VPAA_ASSISTANT",
   "VPAA",
   "UNIVERSITY_PRESIDENT",
@@ -158,6 +158,7 @@ type ApproverRoleValue = (typeof approverRoleValues)[number];
 type ApproverPositionValue = (typeof approverPositionValues)[number];
 type ExclusiveApproverPositionValue =
   (typeof exclusiveApproverPositions)[number];
+type RouteTargetPositionValue = (typeof routeTargetPositionValues)[number];
 type VenueBlockTypeValue = (typeof venueBlockTypes)[number];
 type SapfDbClient = typeof prisma | Prisma.TransactionClient;
 type SapfChange = {
@@ -433,38 +434,6 @@ function validateBlockScheduleSlots(
 
 function canMessageConcernThread(stepStatus: string) {
   return ["ACTIVE", "RETURNED"].includes(stepStatus);
-}
-
-function supportRequestValuesFromData(data: FormData) {
-  return [
-    ...new Set(
-      data
-        .getAll("supportRequests")
-        .map(String)
-        .map((value) => normalizeSupportRequestLabel(value))
-        .filter(Boolean),
-    ),
-  ];
-}
-
-function requestNeedsBudgetSignatory(data: FormData) {
-  return supportRequestValuesFromData(data).includes("Budget");
-}
-
-function isFinanceApproverUser(user: {
-  email?: string | null;
-  name?: string | null;
-  accounts?: Array<{ title?: string | null }>;
-}) {
-  const searchFields = [
-    user.name,
-    user.email,
-    ...(user.accounts || []).map((account) => account.title),
-  ]
-    .filter(Boolean)
-    .map((value) => String(value).toLowerCase());
-
-  return searchFields.some((value) => value.includes("finance"));
 }
 
 async function nextRequestNumber(db: SapfDbClient = prisma) {
@@ -817,8 +786,11 @@ async function enforceSapfApprovalTimeouts(options: { requestId?: string } = {})
   }
 }
 
-async function getFirstActiveApprover(position: string) {
-  return prisma.approverPositionUser.findFirst({
+async function getFirstActiveApprover(
+  position: string,
+  db: SapfDbClient = prisma,
+) {
+  return db.approverPositionUser.findFirst({
     where: {
       position: position as any,
       active: true,
@@ -840,6 +812,205 @@ async function getFirstActiveApprover(position: string) {
     },
     orderBy: {
       createdAt: "asc",
+    },
+  });
+}
+
+function normalizeRouteTargetPosition(value: string) {
+  const normalized = value.toUpperCase();
+  return routeTargetPositionValues.includes(
+    normalized as RouteTargetPositionValue,
+  )
+    ? (normalized as RouteTargetPositionValue)
+    : null;
+}
+
+function routeStepLabel(position: string, reviewer?: { name?: string | null }) {
+  if (position === "ADDITIONAL_SIGNATORY") {
+    return reviewer?.name
+      ? `Additional Signatory - ${reviewer.name}`
+      : "Additional Signatory";
+  }
+
+  return approverPositionLabel(position);
+}
+
+async function resolveRouteReviewer({
+  position,
+  reviewerId,
+  db = prisma,
+}: {
+  position: RouteTargetPositionValue | "SDS";
+  reviewerId?: string | null;
+  db?: SapfDbClient;
+}) {
+  const assignment = reviewerId
+    ? await db.approverPositionUser.findFirst({
+        where: {
+          userId: reviewerId,
+          position: position as any,
+          active: true,
+          user: {
+            banned: {
+              not: true,
+            },
+          },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      })
+    : await getFirstActiveApprover(position, db);
+
+  if (!assignment) {
+    throw new Error(
+      `No active approver is configured for ${approverPositionLabel(position)}.`,
+    );
+  }
+
+  return {
+    userId: assignment.userId,
+    user: assignment.user,
+  };
+}
+
+function maxStepOrder(steps: Array<{ stepOrder: number }>) {
+  return steps.reduce((max, step) => Math.max(max, step.stepOrder), 0);
+}
+
+async function activateSdsDecisionStep({
+  tx,
+  request,
+  afterStep,
+  now,
+}: {
+  tx: Prisma.TransactionClient;
+  request: {
+    id: string;
+    approvalSteps: Array<{
+      id: string;
+      stepOrder: number;
+      position: string;
+      status: string;
+    }>;
+  };
+  afterStep: { id: string; stepOrder: number };
+  now: Date;
+}) {
+  const sdsReviewer = await resolveRouteReviewer({
+    position: "SDS",
+    db: tx,
+  });
+  const reusableSdsStep = request.approvalSteps.find(
+    (candidate) =>
+      candidate.id !== afterStep.id &&
+      candidate.position === "SDS" &&
+      candidate.stepOrder > afterStep.stepOrder &&
+      ["PENDING", "SKIPPED"].includes(candidate.status),
+  );
+  const skipWhere: Prisma.ApprovalStepUpdateManyArgs["where"] = {
+    requestId: request.id,
+    stepOrder: { gt: afterStep.stepOrder },
+    status: { in: ["PENDING", "ACTIVE", "RETURNED"] as any },
+  };
+
+  if (reusableSdsStep) {
+    skipWhere.id = { not: reusableSdsStep.id };
+  }
+
+  await tx.approvalStep.updateMany({
+    where: skipWhere,
+    data: {
+      status: "SKIPPED" as any,
+      comment: "Superseded by SDS-controlled routing.",
+      actedAt: now,
+    },
+  });
+
+  if (reusableSdsStep) {
+    return tx.approvalStep.update({
+      where: { id: reusableSdsStep.id },
+      data: {
+        reviewerId: sdsReviewer.userId,
+        label: routeStepLabel("SDS", sdsReviewer.user),
+        status: "ACTIVE" as any,
+        finalizesRequest: false,
+        comment: null,
+        actedAt: null,
+      },
+    });
+  }
+
+  return tx.approvalStep.create({
+    data: {
+      id: uuid(),
+      requestId: request.id,
+      stepOrder: maxStepOrder(request.approvalSteps) + 1,
+      position: "SDS" as any,
+      label: routeStepLabel("SDS", sdsReviewer.user),
+      reviewerId: sdsReviewer.userId,
+      status: "ACTIVE" as any,
+      finalizesRequest: false,
+    },
+  });
+}
+
+async function createRoutedApprovalStep({
+  tx,
+  request,
+  currentStep,
+  position,
+  reviewerId,
+  finalizesRequest,
+  now,
+}: {
+  tx: Prisma.TransactionClient;
+  request: {
+    id: string;
+    approvalSteps: Array<{ id: string; stepOrder: number; status: string }>;
+  };
+  currentStep: { id: string };
+  position: RouteTargetPositionValue;
+  reviewerId?: string | null;
+  finalizesRequest: boolean;
+  now: Date;
+}) {
+  const reviewer = await resolveRouteReviewer({
+    position,
+    reviewerId,
+    db: tx,
+  });
+
+  await tx.approvalStep.updateMany({
+    where: {
+      requestId: request.id,
+      id: { not: currentStep.id },
+      status: { in: ["PENDING", "ACTIVE", "RETURNED"] as any },
+    },
+    data: {
+      status: "SKIPPED" as any,
+      comment: "Superseded by SDS routing decision.",
+      actedAt: now,
+    },
+  });
+
+  return tx.approvalStep.create({
+    data: {
+      id: uuid(),
+      requestId: request.id,
+      stepOrder: maxStepOrder(request.approvalSteps) + 1,
+      position: position as any,
+      label: routeStepLabel(position, reviewer.user),
+      reviewerId: reviewer.userId,
+      status: "ACTIVE" as any,
+      finalizesRequest,
     },
   });
 }
@@ -1002,6 +1173,14 @@ function sapfListInclude() {
         id: true,
         name: true,
         email: true,
+      },
+    },
+    suggestedRouteBy: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
       },
     },
     venues: requestVenueInclude(),
@@ -1414,11 +1593,6 @@ function part6Changes(existing: any, data: FormData) {
 
 async function buildApprovalChain(data: FormData) {
   const adviserId = field(data, "adviserId");
-  const budgetRequested = requestNeedsBudgetSignatory(data);
-  const requestedAdditionalSignatoryIds = data
-    .getAll("additionalSignatoryIds")
-    .map(String)
-    .filter(Boolean);
 
   if (!adviserId) {
     throw new Error("Please select an adviser before submitting.");
@@ -1439,6 +1613,7 @@ async function buildApprovalChain(data: FormData) {
     label: string;
     reviewerId: string;
     status: string;
+    finalizesRequest: boolean;
   }> = [
     {
       id: uuid(),
@@ -1447,63 +1622,9 @@ async function buildApprovalChain(data: FormData) {
       label: "Adviser",
       reviewerId: adviser.id,
       status: "ACTIVE",
+      finalizesRequest: false,
     },
   ];
-
-  for (const position of requiredFixedPositions) {
-    const match = await getFirstActiveApprover(position);
-    if (!match) {
-      throw new Error(
-        `No active approver is configured for ${position.replaceAll("_", " ")}.`,
-      );
-    }
-
-    steps.push({
-      id: uuid(),
-      stepOrder: steps.length + 1,
-      position,
-      label: approverPositionLabel(position),
-      reviewerId: match.userId,
-      status: "PENDING",
-    });
-  }
-
-  if (requestedAdditionalSignatoryIds.length > 0) {
-    const insertAt = steps.findIndex((step) => step.position === "VPAA");
-    const additionalUsers = await prisma.user.findMany({
-      where: {
-        id: { in: requestedAdditionalSignatoryIds },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        accounts: {
-          where: { providerId: "credential" },
-          select: { title: true },
-        },
-      },
-    });
-
-    const filteredAdditionalUsers = additionalUsers.filter((user) =>
-      budgetRequested ? true : !isFinanceApproverUser(user),
-    );
-
-    const additionalSteps = filteredAdditionalUsers.map((user) => ({
-      id: uuid(),
-      stepOrder: 0,
-      position: "ADDITIONAL_SIGNATORY",
-      label: `Additional Signatory - ${user.name}`,
-      reviewerId: user.id,
-      status: "PENDING",
-    }));
-
-    steps.splice(insertAt, 0, ...additionalSteps);
-    steps.forEach((step, index) => {
-      step.stepOrder = index + 1;
-      step.status = index === 0 ? "ACTIVE" : "PENDING";
-    });
-  }
 
   return steps;
 }
@@ -1951,6 +2072,14 @@ export async function getSapfWorkspace(): Promise<ActionResult<any>> {
           email: true,
         },
       },
+      suggestedRouteBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
       venues: requestVenueInclude(),
       coreValues: {
         select: { value: true },
@@ -2214,6 +2343,14 @@ export async function getSapfRequestById(
           id: true,
           name: true,
           email: true,
+        },
+      },
+      suggestedRouteBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
         },
       },
       venues: requestVenueInclude(),
@@ -2796,7 +2933,7 @@ export async function saveSapfRequest(
             where: {
               requestId: existing.id,
               stepOrder: { gt: returnedStep.stepOrder },
-              status: { in: ["ACTIVE", "RETURNED", "SKIPPED"] as any },
+              status: { in: ["ACTIVE", "RETURNED"] as any },
             },
             data: {
               status: "PENDING" as any,
@@ -3773,6 +3910,15 @@ export async function reviewSapfRequest(
     const requestId = field(data, "requestId");
     const stepId = field(data, "stepId");
     const comment = field(data, "comment");
+    const routeSuggestionPosition = normalizeRouteTargetPosition(
+      field(data, "routeSuggestionPosition"),
+    );
+    const routeSuggestionReason =
+      field(data, "routeSuggestionReason") || comment || null;
+    const routePosition = normalizeRouteTargetPosition(
+      field(data, "routePosition"),
+    );
+    const routeReviewerId = field(data, "routeReviewerId") || null;
     const reasonTagInput = field(data, "reasonTag").toUpperCase();
     const allowedReasonTags = [
       "POLICY",
@@ -3819,53 +3965,22 @@ export async function reviewSapfRequest(
       return { success: false, message: "You are not assigned to this step." };
     }
 
-    const requiresDeanSelection =
-      action === "approve" && step.position === "ADVISER";
-    let selectedDeanId: string | null = null;
-    const deanStep = requiresDeanSelection
-      ? request.approvalSteps.find((item) => item.position === "DEAN")
-      : null;
-
-    if (requiresDeanSelection) {
-      const deanId = field(data, "deanId");
-      if (!deanId) {
-        return {
-          success: false,
-          message: "Please select a dean for the next approval.",
-        };
-      }
-
-      const deanPosition = await prisma.approverPositionUser.findFirst({
-        where: {
-          userId: deanId,
-          position: "DEAN" as any,
-          active: true,
-        },
-        select: { userId: true },
-      });
-
-      if (!deanPosition) {
-        return {
-          success: false,
-          message: "Selected dean is not an active approver.",
-        };
-      }
-
-      if (!deanStep) {
-        return {
-          success: false,
-          message: "Dean approval step is missing from this request.",
-        };
-      }
-
-      selectedDeanId = deanPosition.userId;
-    }
+    const isSdsStep = step.position === "SDS";
+    const isPresidentFinalStep =
+      step.position === "UNIVERSITY_PRESIDENT" &&
+      Boolean((step as any).finalizesRequest);
 
     if (action === "return" && !comment) {
       return { success: false, message: "A revision comment is required." };
     }
     if (action === "reject" && !comment) {
       return { success: false, message: "A rejection reason is required." };
+    }
+    if (action === "route" && !isSdsStep) {
+      return { success: false, message: "Only SDS can route a request." };
+    }
+    if (action === "route" && !routePosition) {
+      return { success: false, message: "Select where SDS should route this request." };
     }
 
     if (action === "reject") {
@@ -3883,6 +3998,11 @@ export async function reviewSapfRequest(
           data: {
             status: "REJECTED" as any,
             rejectionReason: comment,
+            currentStepOrder: null,
+            suggestedRoutePosition: null,
+            suggestedRouteReason: null,
+            suggestedRouteById: null,
+            suggestedRouteAt: null,
           },
         });
         await tx.approvalAction.create({
@@ -3930,6 +4050,10 @@ export async function reviewSapfRequest(
         actorName: user.name,
       });
       revalidatePath("/user/dashboard");
+      revalidatePath("/user/bookings");
+      revalidatePath("/user/approvals");
+      revalidatePath(`/user/bookings/${request.id}`);
+      revalidatePath(`/user/approvals/${request.id}`);
       return { success: true, message: "Request rejected." };
     }
 
@@ -3956,6 +4080,10 @@ export async function reviewSapfRequest(
           data: {
             status: "RETURNED_FOR_REVISION" as any,
             currentStepOrder: step.stepOrder,
+            suggestedRoutePosition: null,
+            suggestedRouteReason: null,
+            suggestedRouteById: null,
+            suggestedRouteAt: null,
           },
         });
         await tx.approvalAction.create({
@@ -4034,10 +4162,14 @@ export async function reviewSapfRequest(
         actionLabel: "Revise Reservation",
       });
       revalidatePath("/user/dashboard");
+      revalidatePath("/user/bookings");
+      revalidatePath("/user/approvals");
+      revalidatePath(`/user/bookings/${request.id}`);
+      revalidatePath(`/user/approvals/${request.id}`);
       return { success: true, message: "Request returned for revision." };
     }
 
-    if (action !== "approve") {
+    if (!["approve", "route"].includes(action)) {
       return { success: false, message: "Invalid review action." };
     }
 
@@ -4063,7 +4195,7 @@ export async function reviewSapfRequest(
     }> = [];
     let shouldReplaceAttachments = false;
 
-    if (step.position === "SDS") {
+    if (isSdsStep && ["approve", "route"].includes(action)) {
       const parsed = await parseSdsClearancePayload(data, request.id);
       part4 = parsed.part4;
       uploadedAttachments = parsed.uploadedAttachments;
@@ -4071,30 +4203,13 @@ export async function reviewSapfRequest(
     }
     const sdsClearanceChanges = part4 ? part4Changes(request, part4) : [];
 
-    const nextStep = request.approvalSteps.find(
-      (item) => item.stepOrder > step.stepOrder && item.status === "PENDING",
-    );
-    if (
-      nextStep &&
-      !["ADVISER", "DEAN", "ADDITIONAL_SIGNATORY"].includes(nextStep.position)
-    ) {
-      const activeAssignment = await prisma.approverPositionUser.findFirst({
-        where: {
-          userId: nextStep.reviewerId,
-          position: nextStep.position as any,
-          active: true,
-        },
-        select: { id: true },
-      });
-      if (!activeAssignment) {
-        return {
-          success: false,
-          message: `${nextStep.label} assignment changed or became inactive. Ask super admin to fix approver positions first.`,
-        };
-      }
-    }
+    let handoffStep: any | null = null;
+    let finalized = false;
+    let routed = false;
+    let recommendedRouteLabel: string | null = null;
 
     await prisma.$transaction(async (tx) => {
+      const now = new Date();
       const venueIds = request.venues.map((venue) => venue.eventSpaceId);
       await lockVenueIdsForTransaction(tx, venueIds);
       const conflict = await detectConflicts(
@@ -4107,19 +4222,12 @@ export async function reviewSapfRequest(
         throw new Error(conflictMessage(conflict));
       }
 
-      if (selectedDeanId && deanStep) {
-        await tx.approvalStep.update({
-          where: { id: deanStep.id },
-          data: { reviewerId: selectedDeanId },
-        });
-      }
-
       await tx.approvalStep.update({
         where: { id: step.id },
         data: {
           status: "APPROVED" as any,
           comment: comment || null,
-          actedAt: new Date(),
+          actedAt: now,
         },
       });
       await tx.concernThread.updateMany({
@@ -4166,27 +4274,74 @@ export async function reviewSapfRequest(
         }
       }
 
-      if (nextStep) {
-        await tx.approvalStep.update({
-          where: { id: nextStep.id },
-          data: { status: "ACTIVE" as any },
+      if (action === "route" && routePosition) {
+        const finalizesRequest = routePosition === "UNIVERSITY_PRESIDENT";
+        const nextRouteStep = await createRoutedApprovalStep({
+          tx,
+          request,
+          currentStep: step,
+          position: routePosition,
+          reviewerId: routeReviewerId,
+          finalizesRequest,
+          now,
         });
+        handoffStep = nextRouteStep;
+        routed = true;
+
         await tx.sAPFRequest.update({
           where: { id: request.id },
           data: {
             status: "IN_REVIEW" as any,
-            currentStepOrder: nextStep.stepOrder,
+            currentStepOrder: nextRouteStep.stepOrder,
+            suggestedRoutePosition: null,
+            suggestedRouteReason: null,
+            suggestedRouteById: null,
+            suggestedRouteAt: null,
             ...(part4 || {}),
           },
         });
-      } else {
+        await tx.approvalAction.create({
+          data: {
+            id: uuid(),
+            requestId: request.id,
+            stepId: step.id,
+            actorId: user.id,
+            action: "ROUTED" as any,
+            comment:
+              comment ||
+              `SDS routed this request to ${nextRouteStep.label}.`,
+          },
+        });
+        await logSapfActivity(tx, {
+          requestId: request.id,
+          actorId: user.id,
+          action: "ROUTED",
+          title: `SDS routed the booking to ${nextRouteStep.label}`,
+          description: `${userDisplayName(user)} routed this request for ${
+            finalizesRequest ? "final approval" : "additional review"
+          }.` ,
+          metadata: {
+            fromStepId: step.id,
+            toStepId: nextRouteStep.id,
+            toPosition: routePosition,
+            toReviewerId: nextRouteStep.reviewerId,
+            finalizesRequest,
+            reason: comment || null,
+            changes: sdsClearanceChanges,
+          },
+        });
+      } else if (isSdsStep || isPresidentFinalStep) {
         await tx.sAPFRequest.update({
           where: { id: request.id },
           data: {
             status: "APPROVED" as any,
             currentStepOrder: null,
-            approvedAt: new Date(),
+            approvedAt: now,
             verificationToken: uuid(),
+            suggestedRoutePosition: null,
+            suggestedRouteReason: null,
+            suggestedRouteById: null,
+            suggestedRouteAt: null,
             ...(part4 || {}),
           },
         });
@@ -4196,7 +4351,9 @@ export async function reviewSapfRequest(
             requestId: request.id,
             actorId: user.id,
             action: "FINALIZED" as any,
-            comment: "Reservation finalized and slot locked.",
+            comment: isSdsStep
+              ? "SDS finalized the reservation and locked the slot."
+              : "President final approval completed and locked the slot.",
           },
         });
         await logSapfActivity(tx, {
@@ -4204,15 +4361,81 @@ export async function reviewSapfRequest(
           actorId: user.id,
           action: "FINALIZED",
           title: "Reservation fully approved",
-          description: "All required approvers have completed the workflow.",
+          description: isSdsStep
+            ? "SDS approved the request without requiring President approval."
+            : "President final approval completed the SDS-routed workflow.",
           metadata: {
-            approvedAt: new Date().toISOString(),
+            approvedAt: now.toISOString(),
+            finalStepId: step.id,
+            finalStepLabel: step.label,
+            changes: sdsClearanceChanges,
           },
         });
+        finalized = true;
+      } else {
+        const nextSdsStep = await activateSdsDecisionStep({
+          tx,
+          request,
+          afterStep: step,
+          now,
+        });
+        handoffStep = nextSdsStep;
+
+        const suggestionData = routeSuggestionPosition
+          ? {
+              suggestedRoutePosition: routeSuggestionPosition as any,
+              suggestedRouteReason: routeSuggestionReason,
+              suggestedRouteById: user.id,
+              suggestedRouteAt: now,
+            }
+          : {
+              suggestedRoutePosition: null,
+              suggestedRouteReason: null,
+              suggestedRouteById: null,
+              suggestedRouteAt: null,
+            };
+
+        await tx.sAPFRequest.update({
+          where: { id: request.id },
+          data: {
+            status: "IN_REVIEW" as any,
+            currentStepOrder: nextSdsStep.stepOrder,
+            ...suggestionData,
+          },
+        });
+
+        if (routeSuggestionPosition) {
+          recommendedRouteLabel = approverPositionLabel(routeSuggestionPosition);
+          await tx.approvalAction.create({
+            data: {
+              id: uuid(),
+              requestId: request.id,
+              stepId: step.id,
+              actorId: user.id,
+              action: "RECOMMENDED_ROUTE" as any,
+              comment:
+                routeSuggestionReason ||
+                `Recommended routing to ${recommendedRouteLabel}.`,
+            },
+          });
+          await logSapfActivity(tx, {
+            requestId: request.id,
+            actorId: user.id,
+            action: "RECOMMENDED_ROUTE",
+            title: `${step.label} recommended ${recommendedRouteLabel}`,
+            description: `${userDisplayName(user)} approved this step and recommended the next route for SDS review.`,
+            metadata: {
+              stepId: step.id,
+              stepLabel: step.label,
+              suggestedRoutePosition: routeSuggestionPosition,
+              reason: routeSuggestionReason,
+            },
+          });
+        }
       }
     });
 
-    if (!nextStep) {
+    if (finalized) {
       await syncSapfOperationalStatusById(request.id);
       await notifyProvisionersForEquipmentRequest(request.id, "approved");
       await notifyOfficerEquipmentStatusOnApproval(request.id);
@@ -4220,57 +4443,100 @@ export async function reviewSapfRequest(
 
     await createNotification(
       request.officerId,
-      nextStep ? "Reservation step approved" : "Reservation fully approved",
-      nextStep
-        ? `${step.label} approved ${request.requestNumber}.`
-        : `${request.requestNumber} is fully approved. Download the approved reservation with QR code.`,
-      nextStep ? "APPROVAL" : "FINAL",
+      finalized
+        ? "Reservation fully approved"
+        : routed
+          ? "Reservation routed"
+          : "Reservation awaiting SDS decision",
+      finalized
+        ? `${request.requestNumber} is fully approved. Download the approved reservation with QR code.`
+        : routed
+          ? `${request.requestNumber} was routed to ${handoffStep?.label}.`
+          : `${step.label} approved ${request.requestNumber}; SDS will decide the next route.`,
+      finalized ? "FINAL" : "APPROVAL",
       request.id,
     );
 
-    if (nextStep) {
-      const nextReviewerId =
-        selectedDeanId && nextStep.position === "DEAN"
-          ? selectedDeanId
-          : nextStep.reviewerId;
+    if (handoffStep) {
       await createNotification(
-        nextReviewerId,
-        "Reservation request needs review",
-        `${request.requestNumber} - ${request.title} is waiting for your approval.`,
+        handoffStep.reviewerId,
+        handoffStep.position === "SDS"
+          ? "Reservation awaits SDS routing"
+          : handoffStep.finalizesRequest
+            ? "Reservation request needs final review"
+            : "Reservation request routed to you",
+        `${request.requestNumber} - ${request.title} is waiting for your decision.`,
         "APPROVAL",
         request.id,
       );
       await notifyApproverForSapfReview({
         requestId: request.id,
-        reviewerId: nextReviewerId,
+        reviewerId: handoffStep.reviewerId,
         title: "Reservation request advanced to your queue",
-        eyebrow: "Approval action required",
-        message: `${step.label} has approved this reservation request. It is now waiting for your review and action.`,
+        eyebrow:
+          handoffStep.position === "SDS"
+            ? "SDS routing decision required"
+            : handoffStep.finalizesRequest
+              ? "Final approval requested"
+              : "Approval action required",
+        message:
+          handoffStep.position === "SDS"
+            ? `${step.label} approved this reservation. SDS must now decide whether to finalize or route it.`
+            : `SDS routed this reservation request to ${handoffStep.label}.`,
       });
     }
 
     await notifyOfficerForSapfWorkflow({
       requestId: request.id,
-      title: nextStep ? "moved forward" : "was fully approved",
-      eyebrow: nextStep ? "Approval progress update" : "Final approval complete",
-      headline: nextStep
-        ? "Your reservation request moved to the next approval step"
-        : "Your reservation request is fully approved",
-      message: nextStep
-        ? `${step.label} approved your reservation request. It has been forwarded to the next approver in the workflow.`
-        : "All required approvers have completed the workflow. Your approved reservation document is now available with verification.",
-      statusLabel: nextStep ? "Step Approved" : "Fully Approved",
+      title: finalized
+        ? "was fully approved"
+        : routed
+          ? "was routed"
+          : "is awaiting SDS routing",
+      eyebrow: finalized
+        ? "Final approval complete"
+        : routed
+          ? "SDS routing update"
+          : "Approval progress update",
+      headline: finalized
+        ? "Your reservation request is fully approved"
+        : routed
+          ? "SDS routed your reservation request"
+          : "Your reservation request is with SDS",
+      message: finalized
+        ? "The required routing decisions are complete. Your approved reservation document is now available with verification."
+        : routed
+          ? `SDS routed your request to ${handoffStep?.label}.`
+          : `${step.label} approved your reservation request. SDS will decide whether to finalize it or route it for another review.`,
+      statusLabel: finalized
+        ? "Fully Approved"
+        : routed
+          ? "Routed"
+          : "Awaiting SDS",
       tone: "success",
-      comment: comment || null,
+      comment:
+        comment ||
+        (recommendedRouteLabel
+          ? `Recommended route: ${recommendedRouteLabel}`
+          : null),
       actorName: user.name,
-      actionLabel: nextStep ? "Track Reservation" : "View Approved Request",
+      actionLabel: finalized ? "View Approved Request" : "Track Reservation",
     });
 
     revalidatePath("/user/dashboard");
     revalidatePath("/user/equipment");
+    revalidatePath("/user/bookings");
+    revalidatePath("/user/approvals");
+    revalidatePath(`/user/bookings/${request.id}`);
+    revalidatePath(`/user/approvals/${request.id}`);
+    revalidatePath("/calendar");
     return {
       success: true,
-      message: nextStep ? "Step approved." : "Request fully approved.",
+      message: finalized
+        ? "Request fully approved."
+        : routed
+          ? "Request routed."
+          : "Step approved and sent to SDS for routing.",
     };
   } catch (error) {
     console.error("Review failed:", error);

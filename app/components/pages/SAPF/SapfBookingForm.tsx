@@ -10,7 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/app/components/ui/card";
-import { Checkbox } from "@/app/components/ui/checkbox";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import {
@@ -67,15 +66,6 @@ import {
 
 const DEFAULT_BOOKING_ADVANCE_DAYS = 30;
 const MAX_PROGRAM_FLOW_ATTACHMENT_BYTES = 25 * 1024 * 1024;
-const REQUIRED_CHAIN_POSITIONS = [
-  "DEAN",
-  "SDS",
-  "SAS",
-  "VPAA_ASSISTANT",
-  "VPAA",
-  "UNIVERSITY_PRESIDENT",
-] as const;
-
 type ScheduleRow = {
   id: string;
   date: string;
@@ -149,12 +139,6 @@ function userNameWithTitle(user: any) {
   return user.title ? `${user.name}, ${user.title}` : user.name;
 }
 
-function isFinanceSignatoryUser(user: any) {
-  return [user?.name, user?.email, user?.title]
-    .filter(Boolean)
-    .some((value) => String(value).toLowerCase().includes("finance"));
-}
-
 function createSubmissionKey() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 }
@@ -179,18 +163,6 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   budgetBreakdown: "Budget breakdown",
   revisionSummary: "Revision comment",
 };
-
-function positionLabel(position: string) {
-  if (position === "SDS") return "SDS/Admin";
-  if (position === "SAS") return "SAS";
-  if (position === "VPAA") return "VPAA";
-  if (position === "VPAA_ASSISTANT") return "VPAA Assistant";
-  if (position === "UNIVERSITY_PRESIDENT") return "University President";
-  return position
-    .replaceAll("_", " ")
-    .toLowerCase()
-    .replace(/^\w/, (c) => c.toUpperCase());
-}
 
 function programOptionForValue(value?: string) {
   const normalized = String(value || "")
@@ -377,8 +349,6 @@ export default function SapfBookingForm({
   const [venueSearch, setVenueSearch] = useState("");
   const [adviserPopoverOpen, setAdviserPopoverOpen] = useState(false);
   const [adviserSearch, setAdviserSearch] = useState("");
-  const [signatoryPopoverOpen, setSignatoryPopoverOpen] = useState(false);
-  const [signatorySearch, setSignatorySearch] = useState("");
   const [savingIntent, setSavingIntent] = useState("");
   const [submissionKey] = useState(createSubmissionKey);
   const isEditing = Boolean(initialRequest);
@@ -502,39 +472,13 @@ export default function SapfBookingForm({
         ? [...new Set([...current, value])]
         : current.filter((item) => item !== value),
     );
-
-    if (lockApprovalChain || value !== "Budget") return;
-
-    if (checked) {
-      const financeIds = financeSignatoryOptions.map((user) => user.id);
-      if (financeIds.length > 0) {
-        setSelectedAdditionalSignatoryIds((current) => [
-          ...new Set([...current, ...financeIds]),
-        ]);
-      }
-      return;
-    }
-
-    setSelectedAdditionalSignatoryIds((current) =>
-      current.filter((userId) => {
-        const user = additionalSignatoryOptions.find((item) => item.id === userId);
-        return user ? !isFinanceSignatoryUser(user) : true;
-      }),
-    );
   };
   const initialAdviserId =
     initialRequest?.approvalSteps?.find(
       (step: any) => step.position === "ADVISER",
     )?.reviewerId || "";
-  const initialAdditionalSignatories = new Set<string>(
-    (initialRequest?.approvalSteps || [])
-      .filter((step: any) => step.position === "ADDITIONAL_SIGNATORY")
-      .map((step: any) => step.reviewerId),
-  );
   const [selectedAdviserId, setSelectedAdviserId] =
     useState(initialAdviserId);
-  const [selectedAdditionalSignatoryIds, setSelectedAdditionalSignatoryIds] =
-    useState<string[]>(Array.from(initialAdditionalSignatories));
   const updateFormValidity = () => {
     const form = formRef.current;
     setNativeFormReady(form ? form.checkValidity() : false);
@@ -644,28 +588,9 @@ export default function SapfBookingForm({
       ? `${bookingAdvanceDays} day${bookingAdvanceDays === 1 ? "" : "s"} in advance`
       : "immediately";
   const adviserOptions = approvers.ADVISER || [];
-  const additionalSignatoryOptions = approvers.ADDITIONAL_SIGNATORY || [];
   const budgetSupportSelected = activeSelectedSupportValues.includes("Budget");
-  const financeSignatoryOptions = additionalSignatoryOptions.filter(
-    isFinanceSignatoryUser,
-  );
-  const regularAdditionalSignatoryOptions = additionalSignatoryOptions.filter(
-    (user) => !isFinanceSignatoryUser(user),
-  );
-  const availableAdditionalSignatoryOptions = budgetSupportSelected
-    ? additionalSignatoryOptions
-    : regularAdditionalSignatoryOptions;
-  const effectiveSelectedAdditionalSignatoryIds = selectedAdditionalSignatoryIds.filter(
-    (userId) => {
-      const user = additionalSignatoryOptions.find((item) => item.id === userId);
-      return budgetSupportSelected || (user ? !isFinanceSignatoryUser(user) : true);
-    },
-  );
   const selectedAdviser = adviserOptions.find(
     (user) => user.id === selectedAdviserId,
-  );
-  const selectedAdditionalSignatories = additionalSignatoryOptions.filter(
-    (user) => effectiveSelectedAdditionalSignatoryIds.includes(user.id),
   );
   const userMatchesSearch = (user: any, search: string) => {
     if (!search) return true;
@@ -677,32 +602,13 @@ export default function SapfBookingForm({
   const filteredAdvisers = adviserOptions.filter((user) =>
     userMatchesSearch(user, adviserSearch),
   );
-  const filteredAdditionalSignatories = availableAdditionalSignatoryOptions.filter(
-    (user) => userMatchesSearch(user, signatorySearch),
-  );
   const adviserSummary = selectedAdviser
     ? userNameWithTitle(selectedAdviser)
     : "Select adviser";
-  const signatorySummary =
-    selectedAdditionalSignatories.length === 0
-      ? "Select additional signatories"
-      : selectedAdditionalSignatories.length === 1
-        ? userNameWithTitle(selectedAdditionalSignatories[0])
-        : `${selectedAdditionalSignatories.length} signatories selected`;
-  const missingRequiredPositions = lockApprovalChain
-    ? []
-    : REQUIRED_CHAIN_POSITIONS.filter(
-        (position) => (approvers[position] || []).length === 0,
-      );
   const missingAdviserOptions =
     !lockApprovalChain && adviserOptions.length === 0;
-  const hasMissingChainOptions =
-    !lockApprovalChain &&
-    (missingAdviserOptions || missingRequiredPositions.length > 0);
-  const missingChainLabels = [
-    ...(missingAdviserOptions ? ["Adviser"] : []),
-    ...missingRequiredPositions.map(positionLabel),
-  ];
+  const hasMissingChainOptions = !lockApprovalChain && missingAdviserOptions;
+  const missingChainLabels = missingAdviserOptions ? ["Adviser"] : [];
 
   const toggleVenue = (venueId: string, checked: boolean) => {
     setSelectedVenueIds(checked ? [venueId] : []);
@@ -741,22 +647,6 @@ export default function SapfBookingForm({
     if (lockApprovalChain) return;
     setSelectedAdviserId(userId);
     setAdviserPopoverOpen(false);
-  };
-
-  const toggleAdditionalSignatory = (userId: string, checked: boolean) => {
-    if (lockApprovalChain) return;
-    setSelectedAdditionalSignatoryIds((current) =>
-      checked
-        ? [...new Set([...current, userId])]
-        : current.filter((id) => id !== userId),
-    );
-  };
-
-  const removeAdditionalSignatory = (userId: string) => {
-    if (lockApprovalChain) return;
-    setSelectedAdditionalSignatoryIds((current) =>
-      current.filter((id) => id !== userId),
-    );
   };
 
   const updateScheduleRow = (
@@ -877,7 +767,7 @@ export default function SapfBookingForm({
 
     if (intent === "submit" && hasMissingChainOptions) {
       popup.showError(
-        `Approval chain is incomplete. Configure: ${missingChainLabels.join(
+        `Routing setup is incomplete. Configure: ${missingChainLabels.join(
           ", ",
         )}.`,
       );
@@ -997,7 +887,7 @@ export default function SapfBookingForm({
       label: "Support",
       done: activeSelectedSupportValues.length > 0,
     },
-    { href: "#form-approval", label: "Approval", done: approvalComplete },
+    { href: "#form-approval", label: "Routing", done: approvalComplete },
   ];
   return (
     <form
@@ -1024,14 +914,6 @@ export default function SapfBookingForm({
       {selectedAdviserId && (
         <input type="hidden" name="adviserId" value={selectedAdviserId} />
       )}
-      {effectiveSelectedAdditionalSignatoryIds.map((userId) => (
-        <input
-          key={userId}
-          type="hidden"
-          name="additionalSignatoryIds"
-          value={userId}
-        />
-      ))}
 
       <div className="sticky top-14 z-30 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur lg:top-4">
         <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -1041,7 +923,7 @@ export default function SapfBookingForm({
             </p>
             <p className="text-xs text-muted-foreground">
               Move section by section. Draft keeps work safe. Submit sends this
-              into approval flow.
+              into SDS-controlled routing.
             </p>
           </div>
           <p className="text-xs font-medium text-primary">
@@ -1785,8 +1667,8 @@ export default function SapfBookingForm({
         <CardHeader>
           <CardTitle>Part 2: School Support</CardTitle>
           <CardDescription>
-            Select only support actually needed. Budget request unlocks VP
-            Finance signatory in approval chain.
+            Select only support actually needed. Budget requests are highlighted
+            for SDS routing so Finance can be added only when it is truly needed.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -1976,8 +1858,8 @@ export default function SapfBookingForm({
             </p>
             <p className="mt-1">
               {budgetSupportSelected
-                ? "VP Finance can now be added under additional signatories if finance review is needed."
-                : "VP Finance stays hidden from additional signatories until budget support is requested."}
+                ? "SDS will see budget support and can route to Finance if a finance review is needed."
+                : "SDS can still route this request, but Finance is not highlighted unless budget support is selected."}
             </p>
           </div>
         </CardContent>
@@ -1999,10 +1881,10 @@ export default function SapfBookingForm({
 
       <Card id="form-approval" className="scroll-mt-40">
         <CardHeader>
-          <CardTitle>Approval Chain</CardTitle>
+          <CardTitle>Routing & Decisions</CardTitle>
           <CardDescription>
-            Select adviser first. Optional signatories stay flexible. VP
-            Finance appears only when budget support is requested.
+            Select the adviser who reviews first. After adviser approval, SDS
+            decides whether to finalize or route the request to another office.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -2010,10 +1892,10 @@ export default function SapfBookingForm({
             <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <div className="space-y-1">
-                <p className="font-semibold">Approval chain needs setup</p>
+                <p className="font-semibold">Routing setup needs attention</p>
                 <p>
-                  Missing approvers: {missingChainLabels.join(", ")}. Ask a
-                  super admin to assign these positions before submitting.
+                  Missing reviewer: {missingChainLabels.join(", ")}. Ask a
+                  super admin to assign this position before submitting.
                 </p>
               </div>
             </div>
@@ -2098,128 +1980,14 @@ export default function SapfBookingForm({
               </p>
             )}
           </div>
-          {additionalSignatoryOptions.length > 0 && (
-            <div>
-              <Label>Additional Signatories</Label>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Always optional. Finance-specific signatory only appears when
-                Part 2 includes Budget.
-              </p>
-              {budgetSupportSelected && financeSignatoryOptions.length > 0 && (
-                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
-                  VP Finance auto-recommended. You can uncheck anytime.
-                </p>
-              )}
-              <Popover
-                open={signatoryPopoverOpen}
-                onOpenChange={setSignatoryPopoverOpen}
-              >
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={lockApprovalChain}
-                    className="mt-1 h-auto min-h-11 w-full justify-between px-3 py-2 text-left font-normal"
-                  >
-                    <span className="truncate">{signatorySummary}</span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  align="start"
-                  className="w-[min(92vw,620px)] p-0"
-                >
-                  <div className="border-b p-3">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        value={signatorySearch}
-                        onChange={(event) =>
-                          setSignatorySearch(event.target.value)
-                        }
-                        placeholder="Search signatories..."
-                        className="pl-9"
-                      />
-                    </div>
-                  </div>
-                  <div className="max-h-72 overflow-y-auto p-2">
-                    {filteredAdditionalSignatories.length === 0 ? (
-                      <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-                        No signatories found.
-                      </p>
-                    ) : (
-                      filteredAdditionalSignatories.map((user) => {
-                        const checked = selectedAdditionalSignatoryIds.includes(
-                          user.id,
-                        );
-                        return (
-                          <div
-                            key={user.id}
-                            role="button"
-                            tabIndex={0}
-                            aria-pressed={checked}
-                            onClick={() =>
-                              toggleAdditionalSignatory(user.id, !checked)
-                            }
-                            onKeyDown={(event) => {
-                              if (
-                                event.key === "Enter" ||
-                                event.key === " "
-                              ) {
-                                event.preventDefault();
-                                toggleAdditionalSignatory(user.id, !checked);
-                              }
-                            }}
-                            className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                          >
-                            <Checkbox checked={checked} className="mt-0.5" />
-                            <span className="min-w-0">
-                              <span className="block font-semibold text-foreground">
-                                {userNameWithTitle(user)}
-                              </span>
-                              <span className="block text-xs text-muted-foreground">
-                                {user.email}
-                              </span>
-                            </span>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {!budgetSupportSelected && financeSignatoryOptions.length > 0 && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Add Budget under Part 2 if you need VP Finance in this chain.
-                </p>
-              )}
-
-              {selectedAdditionalSignatories.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedAdditionalSignatories.map((user) => (
-                    <Badge
-                      key={user.id}
-                      variant="secondary"
-                      className="gap-1 rounded-md py-1"
-                    >
-                      {userNameWithTitle(user)}
-                      {!lockApprovalChain && (
-                        <button
-                          type="button"
-                          onClick={() => removeAdditionalSignatory(user.id)}
-                          className="rounded-sm opacity-70 hover:opacity-100"
-                          aria-label={`Remove ${user.name}`}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <p className="font-semibold text-foreground">After submission</p>
+            <p className="mt-1">
+              Adviser review starts the request. SDS receives the next decision
+              and can approve directly, route to another reviewer, or send it
+              to the University President for final approval.
+            </p>
+          </div>
         </CardContent>
       </Card>
 

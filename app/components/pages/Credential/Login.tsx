@@ -321,7 +321,7 @@ const Login = () => {
                   Welcome back
                 </CardTitle>
                 <CardDescription className="text-base mt-2 text-muted-foreground">
-                  Sign in to access your Zerve account
+                  Sign in to access your UniSpace account
                 </CardDescription>
               </div>
             </CardHeader>

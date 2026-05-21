@@ -67,13 +67,13 @@ export default function SignOutPage() {
               </motion.div>
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-normal text-primary">
-                  Zerve
+                  UniSpace
                 </p>
                 <CardTitle className="text-2xl sm:text-3xl font-bold">
                   Ready to sign out?
                 </CardTitle>
                 <CardDescription className="text-sm mt-2 max-w-sm mx-auto text-muted-foreground">
-                  You&apos;ll be signed out from your Zerve session. You can always
+                  You&apos;ll be signed out from your UniSpace session. You can always
                   sign back in to continue managing your reservations.
                 </CardDescription>
               </div>
@@ -103,7 +103,7 @@ export default function SignOutPage() {
               </Button>
 
               <p className="mt-4 text-[11px] text-center text-muted-foreground">
-                Thank you for using Zerve.
+                Thank you for using UniSpace.
               </p>
             </CardContent>
           </Card>
