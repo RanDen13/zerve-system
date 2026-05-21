@@ -452,8 +452,18 @@ async function nextRequestNumber(db: SapfDbClient = prisma) {
 function composeBudgetDetails(data: FormData) {
   const amount = field(data, "budgetRequestedAmount");
   const purpose = field(data, "budgetPurpose");
-  const breakdown = field(data, "budgetBreakdown");
+  let breakdown = field(data, "budgetBreakdown");
   const legacy = field(data, "budgetDetails");
+
+  const labeledBreakdown = breakdown.match(
+    /Breakdown:\s*([\s\S]*?)(?=\s*$)/i,
+  );
+  if (
+    labeledBreakdown &&
+    /Requested amount:|Purpose:|Breakdown:/i.test(breakdown)
+  ) {
+    breakdown = labeledBreakdown[1].trim();
+  }
 
   if (!amount && !purpose && !breakdown) return legacy;
 
@@ -1593,17 +1603,33 @@ function part6Changes(existing: any, data: FormData) {
 
 async function buildApprovalChain(data: FormData) {
   const adviserId = field(data, "adviserId");
+  const budgetRequested = requestNeedsBudgetSignatory(data);
+  const requestedAdditionalSignatoryIds = [
+    ...new Set(data.getAll("additionalSignatoryIds").map(String).filter(Boolean)),
+  ];
 
   if (!adviserId) {
     throw new Error("Please select an adviser before submitting.");
   }
 
-  const adviser = await prisma.user.findUnique({
-    where: { id: adviserId },
-    select: { id: true, name: true },
+  const adviser = await prisma.approverPositionUser.findFirst({
+    where: {
+      userId: adviserId,
+      position: "ADVISER" as any,
+      active: true,
+      user: {
+        banned: { not: true },
+        role: { in: approverRoleValues as any },
+      },
+    },
+    include: {
+      user: {
+        select: { id: true, name: true },
+      },
+    },
   });
   if (!adviser) {
-    throw new Error("Selected adviser was not found.");
+    throw new Error("Selected adviser is not an active adviser approver.");
   }
 
   const steps: Array<{
@@ -1620,11 +1646,86 @@ async function buildApprovalChain(data: FormData) {
       stepOrder: 1,
       position: "ADVISER",
       label: "Adviser",
-      reviewerId: adviser.id,
+      reviewerId: adviser.user.id,
       status: "ACTIVE",
       finalizesRequest: false,
     },
   ];
+
+  for (const position of requiredFixedPositions) {
+    const match = await getFirstActiveApprover(position);
+    if (!match) {
+      throw new Error(
+        `No active approver is configured for ${position.replaceAll("_", " ")}.`,
+      );
+    }
+
+    steps.push({
+      id: uuid(),
+      stepOrder: steps.length + 1,
+      position,
+      label: approverPositionLabel(position),
+      reviewerId: match.userId,
+      status: "PENDING",
+    });
+  }
+
+  if (requestedAdditionalSignatoryIds.length > 0) {
+    const insertAt = steps.findIndex((step) => step.position === "VPAA");
+    const additionalAssignments = await prisma.approverPositionUser.findMany({
+      where: {
+        userId: { in: requestedAdditionalSignatoryIds },
+        position: "ADDITIONAL_SIGNATORY" as any,
+        active: true,
+        user: {
+          banned: { not: true },
+          role: { in: approverRoleValues as any },
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            accounts: {
+              where: { providerId: "credential" },
+              select: { title: true },
+            },
+          },
+        },
+      },
+    });
+    const additionalUsers = requestedAdditionalSignatoryIds
+      .map(
+        (userId) =>
+          additionalAssignments.find((item) => item.userId === userId)?.user,
+      )
+      .filter((user): user is NonNullable<typeof user> => Boolean(user));
+
+    if (additionalUsers.length !== requestedAdditionalSignatoryIds.length) {
+      throw new Error("One or more additional signatories are no longer active.");
+    }
+
+    const filteredAdditionalUsers = additionalUsers.filter((user) =>
+      budgetRequested ? true : !isFinanceApproverUser(user),
+    );
+
+    const additionalSteps = filteredAdditionalUsers.map((user) => ({
+      id: uuid(),
+      stepOrder: 0,
+      position: "ADDITIONAL_SIGNATORY",
+      label: `Additional Signatory - ${user.name}`,
+      reviewerId: user.id,
+      status: "PENDING",
+    }));
+
+    steps.splice(insertAt, 0, ...additionalSteps);
+    steps.forEach((step, index) => {
+      step.stepOrder = index + 1;
+      step.status = index === 0 ? "ACTIVE" : "PENDING";
+    });
+  }
 
   return steps;
 }
@@ -1811,6 +1912,11 @@ export async function getPublicCalendarData(): Promise<ActionResult<any>> {
 
 export async function getApproverOptions(): Promise<ActionResult<any>> {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return { success: false, message: "Sign in to view approvers." };
+    }
+
     const positions = await prisma.approverPositionUser.findMany({
       where: {
         active: true,
@@ -2758,6 +2864,10 @@ export async function saveSapfRequest(
           sapf,
         })
       : [];
+    const newApprovalChain =
+      isSubmit && (!existing || existing.status === "DRAFT")
+        ? await buildApprovalChain(data)
+        : null;
 
     if (!existing) {
       request = await prisma.$transaction(async (tx) => {
@@ -2835,6 +2945,16 @@ export async function saveSapfRequest(
             conflictWarning: requestData.conflictWarning,
           },
         });
+        if (newApprovalChain) {
+          await tx.approvalStep.createMany({
+            data: newApprovalChain.map((step) => ({
+              ...step,
+              requestId: created.id,
+              position: step.position as any,
+              status: step.status as any,
+            })),
+          });
+        }
         return created;
       }, SAPF_TRANSACTION_OPTIONS);
     } else {
@@ -2972,23 +3092,25 @@ export async function saveSapfRequest(
           });
         }
 
+        if (newApprovalChain) {
+          await tx.approvalStep.deleteMany({
+            where: { requestId: updated.id },
+          });
+          await tx.approvalStep.createMany({
+            data: newApprovalChain.map((step) => ({
+              ...step,
+              requestId: updated.id,
+              position: step.position as any,
+              status: step.status as any,
+            })),
+          });
+        }
+
         return updated;
       }, SAPF_TRANSACTION_OPTIONS);
     }
 
     if (isSubmit) {
-      if (!existing || existing.status === "DRAFT") {
-        const chain = await buildApprovalChain(data);
-        await prisma.approvalStep.createMany({
-          data: chain.map((step) => ({
-            ...step,
-            requestId: request.id,
-            position: step.position as any,
-            status: step.status as any,
-          })),
-        });
-      }
-
       const firstStep = await prisma.approvalStep.findFirst({
         where: { requestId: request.id, status: "ACTIVE" as any },
         include: { reviewer: true },
@@ -3115,9 +3237,12 @@ export async function saveSapfRequest(
   } catch (error) {
     const submissionKey = field(data, "submissionKey");
     if (submissionKey) {
-      const duplicateSubmission = await prisma.sAPFRequest.findUnique({
-        where: { submissionKey },
-      });
+      const duplicateOwner = await getSessionUser().catch(() => null);
+      const duplicateSubmission = duplicateOwner
+        ? await prisma.sAPFRequest.findFirst({
+            where: { submissionKey, officerId: duplicateOwner.id },
+          })
+        : null;
 
       if (duplicateSubmission) {
         return {
@@ -3795,13 +3920,10 @@ export async function reviewSapfChangeRequest(
 }
 
 async function getOrCreateThread(request: any, step: any) {
-  const existing = await prisma.concernThread.findUnique({
+  return prisma.concernThread.upsert({
     where: { approvalStepId: step.id },
-  });
-  if (existing) return existing;
-
-  return prisma.concernThread.create({
-    data: {
+    update: {},
+    create: {
       id: uuid(),
       requestId: request.id,
       approvalStepId: step.id,
@@ -3985,10 +4107,13 @@ export async function reviewSapfRequest(
 
     if (action === "reject") {
       await prisma.$transaction(async (tx) => {
-        await tx.approvalStep.update({
-          where: { id: step.id },
+        const claimedStep = await tx.approvalStep.updateMany({
+          where: { id: step.id, status: "ACTIVE" as any, reviewerId: user.id },
           data: { status: "REJECTED" as any, comment, actedAt: new Date() },
         });
+        if (claimedStep.count !== 1) {
+          throw new Error("This approval step was already processed.");
+        }
         await tx.concernThread.updateMany({
           where: { approvalStepId: step.id },
           data: { status: "RESOLVED" as any },
@@ -4067,10 +4192,13 @@ export async function reviewSapfRequest(
           },
         })) + 1;
       await prisma.$transaction(async (tx) => {
-        await tx.approvalStep.update({
-          where: { id: step.id },
+        const claimedStep = await tx.approvalStep.updateMany({
+          where: { id: step.id, status: "ACTIVE" as any, reviewerId: user.id },
           data: { status: "RETURNED" as any, comment, actedAt: new Date() },
         });
+        if (claimedStep.count !== 1) {
+          throw new Error("This approval step was already processed.");
+        }
         await tx.concernThread.updateMany({
           where: { id: thread.id },
           data: { status: "OPEN" as any },
@@ -4224,12 +4352,24 @@ export async function reviewSapfRequest(
 
       await tx.approvalStep.update({
         where: { id: step.id },
+      if (selectedDeanId && deanStep) {
+        await tx.approvalStep.update({
+          where: { id: deanStep.id },
+          data: { reviewerId: selectedDeanId },
+        });
+      }
+
+      const claimedStep = await tx.approvalStep.updateMany({
+        where: { id: step.id, status: "ACTIVE" as any, reviewerId: user.id },
         data: {
           status: "APPROVED" as any,
           comment: comment || null,
           actedAt: now,
         },
       });
+      if (claimedStep.count !== 1) {
+        throw new Error("This approval step was already processed.");
+      }
       await tx.concernThread.updateMany({
         where: { approvalStepId: step.id },
         data: { status: "RESOLVED" as any },
@@ -4943,18 +5083,9 @@ export async function createManagedAccount(
       return { success: false, message: "Invalid position." };
     }
 
-    await auth.api.signInMagicLink({
-      headers: await headers(),
-      body: {
-        email,
-        callbackURL: "/first-login",
-        newUserCallbackURL: "/first-login",
-        errorCallbackURL: "/login",
-      },
-    });
-
+    const requestHeaders = await headers();
     const createdUser = await auth.api.createUser({
-      headers: await headers(),
+      headers: requestHeaders,
       body: {
         email,
         name: field(data, "name"),
@@ -4991,6 +5122,16 @@ export async function createManagedAccount(
           },
         });
       }
+    });
+
+    await auth.api.signInMagicLink({
+      headers: requestHeaders,
+      body: {
+        email,
+        callbackURL: "/first-login",
+        newUserCallbackURL: "/first-login",
+        errorCallbackURL: "/login",
+      },
     });
 
     revalidatePath("/user/dashboard");
@@ -5032,8 +5173,18 @@ export async function getAccountsWorkspace(): Promise<ActionResult<any>> {
         accounts: {
           where: { providerId: "credential" },
           select: {
-            password: true,
+            id: true,
             title: true,
+          },
+        },
+        _count: {
+          select: {
+            accounts: {
+              where: {
+                providerId: "credential",
+                password: { not: null },
+              },
+            },
           },
         },
         approverPositions: {
@@ -5046,10 +5197,9 @@ export async function getAccountsWorkspace(): Promise<ActionResult<any>> {
     });
 
     const normalizedUsers = users.map((account) => {
-      const credentialAccount = account.accounts[0];
-      const hasPassword = account.accounts.some((entry) =>
-        Boolean(entry.password),
-      );
+      const { _count, ...publicAccount } = account;
+      const credentialAccount = publicAccount.accounts[0];
+      const hasPassword = _count.accounts > 0;
       const status = account.banned
         ? "INACTIVE"
         : hasPassword
@@ -5057,7 +5207,7 @@ export async function getAccountsWorkspace(): Promise<ActionResult<any>> {
           : "PENDING";
 
       return {
-        ...account,
+        ...publicAccount,
         title: credentialAccount?.title || "",
         status,
       };
@@ -5335,22 +5485,18 @@ export async function updateManagedRole(
       };
     }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { role },
-    });
-
-    if (role === SUPER_ADMIN_ROLE) {
-      await prisma.approverPositionUser.updateMany({
-        where: { userId },
-        data: { active: false },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { role },
       });
-    } else if (role === ADMIN_ROLE) {
-      await prisma.$transaction(async (tx) => {
-        await tx.user.update({
-          where: { id: userId },
-          data: { role },
+
+      if (role === SUPER_ADMIN_ROLE) {
+        await tx.approverPositionUser.updateMany({
+          where: { userId },
+          data: { active: false },
         });
+      } else if (role === ADMIN_ROLE) {
         await tx.approverPositionUser.updateMany({
           where: { userId },
           data: { active: false },
@@ -5372,17 +5518,13 @@ export async function updateManagedRole(
             active: true,
           },
         });
-      });
-
-      revalidatePath("/user/accounts");
-      revalidatePath("/user/dashboard");
-      return { success: true, message: "Role updated." };
-    } else if (!approverRoleValues.includes(role as ApproverRoleValue)) {
-      await prisma.approverPositionUser.updateMany({
-        where: { userId },
-        data: { active: false },
-      });
-    }
+      } else if (!approverRoleValues.includes(role as ApproverRoleValue)) {
+        await tx.approverPositionUser.updateMany({
+          where: { userId },
+          data: { active: false },
+        });
+      }
+    });
 
     revalidatePath("/user/accounts");
     revalidatePath("/user/dashboard");

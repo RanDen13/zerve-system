@@ -48,6 +48,20 @@ function validateImageFiles(files: File[]) {
   return null;
 }
 
+function parseKeepImageIds(value: FormDataEntryValue | null) {
+  if (!value) return new Set<string>();
+
+  try {
+    const parsed = JSON.parse(String(value));
+    if (!Array.isArray(parsed)) return new Set<string>();
+    return new Set(
+      parsed.filter((imageId): imageId is string => typeof imageId === "string"),
+    );
+  } catch {
+    return new Set<string>();
+  }
+}
+
 async function activeAmenityIds(ids?: string[]) {
   if (!ids?.length) return [];
   const rows = await prisma.amenity.findMany({
@@ -459,12 +473,22 @@ export async function updateEventSpace(
     );
     const replaceImages = data.get("replaceImages") === "true";
     const keepImageIds: Set<string> | null = replaceImages
-      ? new Set<string>(
-          JSON.parse(String(data.get("keepImageIds") || "[]")).filter(
-            (imageId: unknown): imageId is string => typeof imageId === "string",
-          ),
-        )
+      ? parseKeepImageIds(data.get("keepImageIds"))
       : null;
+    const retainedImageCount = replaceImages
+      ? keepImageIds?.size
+        ? await prisma.eventSpaceImage.count({
+            where: { eventSpaceId: id, id: { in: Array.from(keepImageIds) } },
+          })
+        : 0
+      : await prisma.eventSpaceImage.count({ where: { eventSpaceId: id } });
+
+    if (retainedImageCount + imageFiles.length > MAX_IMAGE_COUNT) {
+      return {
+        success: false,
+        message: `You can keep and upload up to ${MAX_IMAGE_COUNT} images total.`,
+      };
+    }
 
     // Parse amenities from JSON string if present
     const amenitiesData = data.get("amenities");
@@ -499,7 +523,7 @@ export async function updateEventSpace(
               id: uuid(),
               eventSpaceId: id,
               data: buffer,
-              sortOrder: index,
+              sortOrder: retainedImageCount + index,
             })),
           });
         }
@@ -563,9 +587,23 @@ export async function deleteEventSpace(
       };
     }
 
-    await prisma.eventSpace.delete({
-      where: { id },
+    const referencedBookings = await prisma.sAPFRequestVenue.count({
+      where: { eventSpaceId: id },
     });
+
+    if (referencedBookings > 0) {
+      await prisma.eventSpace.update({
+        where: { id },
+        data: { status: "INACTIVE" },
+      });
+
+      return {
+        success: true,
+        message: "Venue has booking history, so it was deactivated instead.",
+      };
+    }
+
+    await prisma.eventSpace.delete({ where: { id } });
 
     return {
       success: true,

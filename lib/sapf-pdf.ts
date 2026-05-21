@@ -26,6 +26,8 @@ type PdfMode = "preview" | "approved";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
+const DOCX_CONVERSION_TIMEOUT_MS = 30_000;
+const REMOTE_CONVERSION_TIMEOUT_MS = 30_000;
 
 async function pathExists(filePath: string) {
   try {
@@ -107,7 +109,11 @@ try {
       docxPath,
       pdfPath,
     ],
-    { windowsHide: true },
+    {
+      windowsHide: true,
+      timeout: DOCX_CONVERSION_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+    },
   );
   await requirePdfOutput(
     pdfPath,
@@ -124,14 +130,14 @@ async function runLibreOfficeDocxToPdf(docxPath: string, pdfPath: string) {
     outputDir,
     `${path.basename(docxPath, path.extname(docxPath))}.pdf`,
   );
-  const { stdout, stderr } = await execFileAsync(sofficePath, [
-    "--headless",
-    "--convert-to",
-    "pdf",
-    "--outdir",
-    outputDir,
-    docxPath,
-  ]);
+  const { stdout, stderr } = await execFileAsync(
+    sofficePath,
+    ["--headless", "--convert-to", "pdf", "--outdir", outputDir, docxPath],
+    {
+      timeout: DOCX_CONVERSION_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+    },
+  );
 
   if (expectedPdfPath !== pdfPath && (await pathExists(expectedPdfPath))) {
     await writeFile(pdfPath, await readFile(expectedPdfPath));
@@ -191,7 +197,10 @@ async function runDocxToPdf(docxPath: string, pdfPath: string) {
   if (process.platform === "darwin") {
     const scriptPath = await resolveConverterScript("convert.sh");
     await access(scriptPath);
-    await execFileAsync("sh", [scriptPath, docxPath, pdfPath, "false"]);
+    await execFileAsync("sh", [scriptPath, docxPath, pdfPath, "false"], {
+      timeout: DOCX_CONVERSION_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+    });
     await requirePdfOutput(pdfPath, "docx2pdf-converter shell script");
     return;
   }
@@ -200,7 +209,10 @@ async function runDocxToPdf(docxPath: string, pdfPath: string) {
     try {
       await runLibreOfficeDocxToPdf(docxPath, pdfPath);
     } catch {
-      await execFileAsync("unoconv", ["-f", "pdf", "-o", pdfPath, docxPath]);
+      await execFileAsync("unoconv", ["-f", "pdf", "-o", pdfPath, docxPath], {
+        timeout: DOCX_CONVERSION_TIMEOUT_MS,
+        killSignal: "SIGKILL",
+      });
       await requirePdfOutput(pdfPath, "unoconv DOCX-to-PDF conversion");
     }
     return;
@@ -727,6 +739,7 @@ async function runConvertApiDocxToPdf(docxBytes: Buffer) {
     method: "POST",
     headers,
     body: formData,
+    signal: AbortSignal.timeout(REMOTE_CONVERSION_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -744,7 +757,9 @@ async function runConvertApiDocxToPdf(docxBytes: Buffer) {
   }
 
   if (file?.Url || file?.FileUrl) {
-    const pdfResponse = await fetch(file.Url || file.FileUrl);
+    const pdfResponse = await fetch(file.Url || file.FileUrl, {
+      signal: AbortSignal.timeout(REMOTE_CONVERSION_TIMEOUT_MS),
+    });
     if (!pdfResponse.ok) {
       throw new Error(
         `ConvertAPI converted file download failed with ${pdfResponse.status}.`,

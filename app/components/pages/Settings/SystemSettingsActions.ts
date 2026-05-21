@@ -3,6 +3,10 @@
 import ActionResult from "@/app/components/ActionResult";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getEmailSettings as readEmailSettings,
+  type SystemEmailSettings,
+} from "@/lib/system-settings";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
@@ -14,8 +18,6 @@ type SystemSettingsData = {
   senderEmail: string;
   senderName: string;
 };
-
-export type SystemEmailSettings = SystemSettingsData;
 
 export type UserNotificationPreferences = {
   emailNotificationsEnabled: boolean;
@@ -85,20 +87,7 @@ export async function getSystemSettings(): Promise<
 }
 
 export async function getEmailSettings(): Promise<SystemEmailSettings> {
-  const settings = await prisma.systemSettings.upsert({
-    where: { id: "SYSTEM" },
-    create: { id: "SYSTEM" },
-    update: {},
-  });
-
-  return {
-    smtpHost: settings.smtpHost,
-    smtpPort: settings.smtpPort,
-    smtpUser: settings.smtpUser,
-    smtpPass: settings.smtpPass,
-    senderEmail: settings.senderEmail,
-    senderName: settings.senderName,
-  };
+  return readEmailSettings();
 }
 
 export async function getUserNotificationPreferences(): Promise<

@@ -47,9 +47,9 @@ Important production notes:
 - Set `DIRECT_URL` to the non-pooled Postgres connection string for Prisma
   migrations and other CLI work.
 - SAPF DOCX downloads work on Vercel because they are generated in-process.
-- SAPF PDF routes are resilient, but full DOCX-to-PDF conversion still depends
-  on system tools such as LibreOffice or Microsoft Word automation, which are
-  not normally available in Vercel functions.
+- SAPF PDF routes fall back to an in-process renderer on Vercel when native
+  DOCX-to-PDF tools are not available. Set `CONVERTAPI_TOKEN` if you want remote
+  DOCX-to-PDF conversion before the fallback.
 
 Recommended Vercel environment variables:
 
@@ -59,6 +59,7 @@ Recommended Vercel environment variables:
 - `NEXT_PUBLIC_URL`: same public URL used by the browser client
 - `BETTER_AUTH_SECRET`: strong random secret
 - `SMTP_*`, `SENDER_*`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` as needed
+- `CONVERTAPI_TOKEN` if remote DOCX-to-PDF conversion is enabled
 
-If you want persistent SQLite instead, prefer the included Docker deployment
-instead of Vercel.
+Run database migrations separately with `pnpm db:deploy` before promoting a
+deployment that depends on new schema changes.
