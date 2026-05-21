@@ -294,7 +294,7 @@ export default function SystemSettingsPage({
                   <Input
                     id="senderName"
                     name="senderName"
-                    placeholder="UniSpace"
+                    placeholder="Unispace"
                     autoComplete="name"
                     defaultValue={initialSettings.senderName}
                   />

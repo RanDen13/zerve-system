@@ -212,7 +212,7 @@ export default function Home() {
               className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200 backdrop-blur"
             >
               <AppLogo className="h-4 w-4 shrink-0" variant="light" />
-              <span>UniSpace</span>
+              <span>Unispace</span>
             </motion.p>
             <motion.h1
               variants={fadeInUp}
@@ -512,7 +512,7 @@ export default function Home() {
             Ready to manage your venue reservation?
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-xl text-white/70">
-            Sign in with your UniSpace account or check the public calendar before
+            Sign in with your Unispace account or check the public calendar before
             planning your activity.
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
@@ -550,7 +550,7 @@ export default function Home() {
             </Link>
           </div>
           <p className="text-muted-foreground">
-            Copyright 2026 La Consolacion University Philippines. UniSpace.
+            Copyright 2026 La Consolacion University Philippines. Unispace.
           </p>
         </div>
       </footer>

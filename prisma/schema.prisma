@@ -531,7 +531,7 @@ model SystemSettings {
   smtpUser    String   @default("")
   smtpPass    String   @default("")
   senderEmail String   @default("")
-  senderName  String   @default("UniSpace")
+  senderName  String   @default("Unispace")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

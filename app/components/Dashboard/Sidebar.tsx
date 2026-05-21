@@ -164,7 +164,7 @@ export default function Sidebar({
               <AppLogo className="h-full w-full" variant="adaptive" priority />
             </motion.div>
             <div>
-              <h2 className="text-base font-bold leading-tight">UniSpace</h2>
+              <h2 className="text-base font-bold leading-tight">Unispace</h2>
               <p className="text-xs capitalize text-muted-foreground">
                 {roleLabel(userRole)}
               </p>

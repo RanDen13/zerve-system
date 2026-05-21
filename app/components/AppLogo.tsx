@@ -18,7 +18,7 @@ export default function AppLogo({
     return (
       <Image
         src="/logo_light.png"
-        alt="UniSpace logo"
+        alt="Unispace logo"
         width={1600}
         height={1600}
         priority={priority}
@@ -31,7 +31,7 @@ export default function AppLogo({
     return (
       <Image
         src="/logo_dark.png"
-        alt="UniSpace logo"
+        alt="Unispace logo"
         width={1600}
         height={1600}
         priority={priority}
@@ -44,7 +44,7 @@ export default function AppLogo({
     <>
       <Image
         src="/logo_dark.png"
-        alt="UniSpace logo"
+        alt="Unispace logo"
         width={1600}
         height={1600}
         priority={priority}

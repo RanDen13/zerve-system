@@ -161,7 +161,7 @@ function emailLayout({
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                   <tr>
                     <td style="padding:28px 32px 44px;">
-                      <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#d1fae5;font-weight:800;">UniSpace Reservation System</div>
+                      <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#d1fae5;font-weight:800;">Unispace Reservation System</div>
                       <h1 style="margin:18px 0 0;color:#ffffff;font-size:30px;line-height:1.18;font-weight:850;">${escapeHtml(headline)}</h1>
                       <p style="margin:14px 0 0;color:#dbeafe;font-size:15px;line-height:1.65;">${escapeHtml(message)}</p>
                     </td>
@@ -201,7 +201,7 @@ function emailLayout({
             <tr>
               <td style="padding:24px 32px 34px;">
                 <a href="${escapeHtml(ctaHref)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;border-radius:12px;padding:14px 20px;font-size:14px;font-weight:850;">${escapeHtml(ctaLabel)}</a>
-                <p style="margin:18px 0 0;color:#64748b;font-size:12px;line-height:1.55;">This is an automated workflow notification from UniSpace. Please do not reply directly to this email.</p>
+                <p style="margin:18px 0 0;color:#64748b;font-size:12px;line-height:1.55;">This is an automated workflow notification from Unispace. Please do not reply directly to this email.</p>
               </td>
             </tr>
           </table>
@@ -255,7 +255,7 @@ export async function notifyApproverForSapfReview({
       ["Schedule", formatSchedule(request)],
       ["Submitted By", escapeHtml(request.officer?.name || "Officer")],
     ];
-    const subject = `[UniSpace] ${request.requestNumber} needs your approval`;
+    const subject = `[Unispace] ${request.requestNumber} needs your approval`;
     const html = emailLayout({
       preview: `${request.requestNumber} is ready for your approval.`,
       eyebrow,
@@ -312,7 +312,7 @@ export async function notifyOfficerForSapfWorkflow({
       ["Schedule", formatSchedule(request)],
       ["Handled By", escapeHtml(actorName || "Approver")],
     ];
-    const subject = `[UniSpace] ${request.requestNumber} ${title}`;
+    const subject = `[Unispace] ${request.requestNumber} ${title}`;
     const html = emailLayout({
       preview: `${request.requestNumber}: ${statusLabel}`,
       eyebrow,
@@ -383,9 +383,9 @@ export async function notifyUserForSapfWorkflow({
       ["Organization", escapeHtml(request.organization)],
       ["Venue", escapeHtml(venueText(request))],
       ["Schedule", formatSchedule(request)],
-      ["Updated By", escapeHtml(actorName || "UniSpace")],
+      ["Updated By", escapeHtml(actorName || "Unispace")],
     ];
-    const subject = `[UniSpace] ${request.requestNumber} ${title}`;
+    const subject = `[Unispace] ${request.requestNumber} ${title}`;
     const html = emailLayout({
       preview: `${request.requestNumber}: ${statusLabel}`,
       eyebrow,
@@ -497,7 +497,7 @@ export async function notifySapfBookingUpdated({
             ? `/user/bookings/${request.id}`
             : `/user/approvals/${request.id}`,
         );
-        const subject = `[UniSpace] ${request.requestNumber} was updated`;
+        const subject = `[Unispace] ${request.requestNumber} was updated`;
         const html = emailLayout({
           preview: `${request.requestNumber} was updated by ${
             actorName || "SDS"

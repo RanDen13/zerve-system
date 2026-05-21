@@ -1,3 +1,3 @@
 UPDATE "system_settings"
-SET "senderName" = 'UniSpace'
+SET "senderName" = 'Unispace'
 WHERE LOWER("senderName") = LOWER('Z' || 'erve');

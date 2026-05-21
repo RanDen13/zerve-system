@@ -404,7 +404,7 @@ CREATE TABLE "system_settings" (
     "smtpUser" TEXT NOT NULL DEFAULT '',
     "smtpPass" TEXT NOT NULL DEFAULT '',
     "senderEmail" TEXT NOT NULL DEFAULT '',
-    "senderName" TEXT NOT NULL DEFAULT 'UniSpace',
+    "senderName" TEXT NOT NULL DEFAULT 'Unispace',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

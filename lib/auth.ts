@@ -147,11 +147,11 @@ export const auth = betterAuth({
       const resetUrl = new URL("/reset-password", appUrl);
       resetUrl.searchParams.set("token", token);
       const html = authEmailLayout({
-        preview: "Reset your UniSpace password.",
+        preview: "Reset your Unispace password.",
         eyebrow: "Password Recovery",
         headline: "Create a new password",
         message:
-          "We received a request to reset your UniSpace password. Use the secure link below to choose a new one.",
+          "We received a request to reset your Unispace password. Use the secure link below to choose a new one.",
         badge: "Reset Password",
         tone: "success",
         rows: [
@@ -165,11 +165,11 @@ export const auth = betterAuth({
       });
       const sent = await sendEmail(
         user.email,
-        "Reset your UniSpace password",
+        "Reset your Unispace password",
         [
           `Hi ${user.name || "there"},`,
           "",
-          "Use this link to create a new UniSpace password:",
+          "Use this link to create a new Unispace password:",
           resetUrl.toString(),
           "",
           "This link expires in 1 hour. If you did not request this, ignore this email.",
@@ -209,11 +209,11 @@ export const auth = betterAuth({
       sendMagicLink: async ({ email, token, url }) => {
         const formattedCode = formatMagicCode(token);
         const html = authEmailLayout({
-          preview: `Your UniSpace magic code is ${formattedCode}.`,
+          preview: `Your Unispace magic code is ${formattedCode}.`,
           eyebrow: "Secure Sign In",
           headline: "Your magic code is ready",
           message:
-            "Use this one-time code to continue signing in to your UniSpace account, or open the secure sign-in link below.",
+            "Use this one-time code to continue signing in to your Unispace account, or open the secure sign-in link below.",
           badge: "Magic Code",
           rows: [
             ["Email", escapeHtml(email)],
@@ -230,9 +230,9 @@ export const auth = betterAuth({
         });
         const sent = await sendEmail(
           email,
-          "Your UniSpace magic code",
+          "Your Unispace magic code",
           [
-            "Use this magic code to sign in to UniSpace:",
+            "Use this magic code to sign in to Unispace:",
             "",
             formattedCode,
             "",

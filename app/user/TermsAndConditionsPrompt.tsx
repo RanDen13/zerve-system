@@ -44,14 +44,14 @@ export default function TermsAndConditionsPrompt({
           <div className="min-w-0">
             <h2 className="text-xl font-semibold">Terms and Conditions</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Please review and accept these terms to continue using UniSpace.
+              Please review and accept these terms to continue using Unispace.
             </p>
           </div>
         </div>
 
         <div className="max-h-[52vh] space-y-4 overflow-y-auto px-6 py-5 text-sm leading-6 text-muted-foreground">
           <p>
-            By using UniSpace, you agree to provide accurate reservation,
+            By using Unispace, you agree to provide accurate reservation,
             account, and activity information. Requests, uploaded files,
             approvals, comments, and schedules must be related to legitimate
             university reservation workflows.

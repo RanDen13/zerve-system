@@ -59,7 +59,7 @@ export default function FirstLoginPassword({
       return;
     }
 
-    popup.showSuccess("Password created. Welcome to UniSpace.");
+    popup.showSuccess("Password created. Welcome to Unispace.");
     router.push("/user/dashboard");
   }
 
@@ -86,7 +86,7 @@ export default function FirstLoginPassword({
           <CardTitle className="text-3xl">Create Your Password</CardTitle>
           <CardDescription>
             {name ? `Welcome, ${name}. ` : ""}
-            Finish setting up {email || "your UniSpace account"}.
+            Finish setting up {email || "your Unispace account"}.
           </CardDescription>
         </CardHeader>
         <CardContent>

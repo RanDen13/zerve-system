@@ -264,7 +264,7 @@ export default function VenueCalendarView({
               }`}
             >
               <CalendarDays className="h-3.5 w-3.5" />
-              UniSpace Calendar
+              Unispace Calendar
             </p>
             <h1
               className={`font-bold tracking-normal ${
