@@ -27,7 +27,8 @@ export const metadata: Metadata = {
   description:
     "Officer-only venue reservation and approval workflow for La Consolacion University Philippines.",
   icons: {
-    icon: "/logo_app.png",
+    icon: "/icon.png",
+    shortcut: "/favicon.ico",
     apple: "/logo_app.png",
   },
 };

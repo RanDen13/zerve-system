@@ -33,11 +33,13 @@ import {
   Loader2,
   PackageCheck,
   PencilLine,
+  QrCode,
   RefreshCcw,
   RotateCcw,
   ShieldCheck,
   XCircle,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
@@ -135,6 +137,11 @@ export default function SapfBookingDetailPage({
   }
 
   const { request, me } = payload;
+  const showVerificationQr =
+    request.status === "APPROVED" && Boolean(request.verificationToken);
+  const verificationHref = showVerificationQr
+    ? `/verify/${request.verificationToken}`
+    : "";
   const sdsStep = request.approvalSteps?.find(
     (step: any) => step.position === "SDS",
   );
@@ -460,6 +467,57 @@ export default function SapfBookingDetailPage({
           </div>
         </CardContent>
       </Card>
+
+      {showVerificationQr && (
+        <Card className="overflow-hidden border-emerald-500/25 bg-emerald-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5" />
+              QR Reservation Proof
+            </CardTitle>
+            <CardDescription>
+              Scan this QR to view the approved reservation details without
+              signing in.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-5 md:grid-cols-[180px_1fr] md:items-center">
+            <div className="flex h-[180px] w-[180px] items-center justify-center rounded-lg border bg-white p-3 shadow-sm">
+              <Image
+                src={`/api/sapf/${request.id}/qr`}
+                alt="Reservation verification QR code"
+                width={156}
+                height={156}
+                unoptimized
+                className="h-[156px] w-[156px]"
+              />
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  Public verification link
+                </p>
+                <p className="mt-1 break-all text-sm text-muted-foreground">
+                  {verificationHref}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline">
+                  <Link href={verificationHref} target="_blank">
+                    <QrCode className="mr-2 h-4 w-4" />
+                    Open Verification
+                  </Link>
+                </Button>
+                <Button asChild>
+                  <a href={`/api/sapf/${request.id}/pdf`}>
+                    <FileDown className="mr-2 h-4 w-4" />
+                    Download PDF with QR
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {request.status === "APPROVED" && (
         <Card className="overflow-hidden border-sky-500/20">

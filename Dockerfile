@@ -13,7 +13,7 @@ RUN apt-get update -y \
 
 FROM base AS builder
 
-ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/zerve?schema=public
+ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/unispace?schema=public
 
 RUN apt-get update -y \
   && apt-get install -y --no-install-recommends python3 make g++ \

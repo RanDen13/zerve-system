@@ -151,12 +151,14 @@ export default function SapfDashboard() {
     ...(isOfficer
       ? [
           {
+            key: "start-request",
             href: "/user/bookings/create",
             title: "Start new request",
             description: "Build reservation, save draft, then submit to adviser and SDS routing.",
             icon: <CirclePlus className="h-5 w-5" />,
           },
           {
+            key: "check-venues",
             href: "/user/spaces",
             title: "Check venues",
             description: "Compare venue capacity, availability, and booking lead times.",
@@ -165,6 +167,7 @@ export default function SapfDashboard() {
         ]
       : [
           {
+            key: "review-queue",
             href: "/user/bookings",
             title: "Open review queue",
             description: "See requests waiting for your action now.",
@@ -172,6 +175,7 @@ export default function SapfDashboard() {
           },
         ]),
     {
+      key: "track-requests",
       href: "/user/bookings",
       title: isOfficer ? "Track my requests" : "Track linked requests",
       description: isOfficer
@@ -265,7 +269,7 @@ export default function SapfDashboard() {
 
       <MotionList className="grid gap-4 md:grid-cols-3 md:gap-5">
         {quickActions.map((action) => (
-          <MotionItem key={action.href}>
+          <MotionItem key={action.key}>
             <StatCard
               label={action.title}
               value=""
@@ -432,7 +436,7 @@ export default function SapfDashboard() {
                     <Link
                       href={
                         notification.requestId
-                          ? `/user/approvals/${notification.requestId}`
+                          ? requestHref(notification.requestId)
                           : "/user/bookings"
                       }
                     >
