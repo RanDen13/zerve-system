@@ -30,8 +30,10 @@ const tableOrder = [
   "venue_block",
   "venue_block_schedule",
   "sapf_request",
+  "equipment_item",
   "sapf_request_schedule",
   "sapf_request_venue",
+  "sapf_equipment_request",
   "sapf_attachment",
   "sapf_core_value",
   "sapf_graduate_attribute",
@@ -63,7 +65,10 @@ const booleanColumns = new Map<string, Set<string>>([
     ]),
   ],
   ["approver_position_user", new Set(["active"])],
+  ["equipment_item", new Set(["active"])],
 ]);
+
+const MAX_POSTGRES_PARAMETERS = 60_000;
 
 function quoteIdent(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
@@ -142,21 +147,29 @@ async function migrate() {
         .all()
         .map((column: any) => column.name as string);
 
-      const values: unknown[] = [];
-      const tuples = rows.map((row, rowIndex) => {
-        const placeholders = columns.map((column, columnIndex) => {
-          values.push(normalizeValue(table, column, row[column]));
-          return `$${rowIndex * columns.length + columnIndex + 1}`;
+      const batchSize = Math.max(
+        1,
+        Math.floor(MAX_POSTGRES_PARAMETERS / columns.length),
+      );
+
+      for (let offset = 0; offset < rows.length; offset += batchSize) {
+        const batch = rows.slice(offset, offset + batchSize);
+        const values: unknown[] = [];
+        const tuples = batch.map((row, rowIndex) => {
+          const placeholders = columns.map((column, columnIndex) => {
+            values.push(normalizeValue(table, column, row[column]));
+            return `$${rowIndex * columns.length + columnIndex + 1}`;
+          });
+
+          return `(${placeholders.join(", ")})`;
         });
 
-        return `(${placeholders.join(", ")})`;
-      });
+        const query = `INSERT INTO ${quoteIdent(table)} (${columns
+          .map((column) => quoteIdent(column))
+          .join(", ")}) VALUES ${tuples.join(", ")}`;
 
-      const query = `INSERT INTO ${quoteIdent(table)} (${columns
-        .map((column) => quoteIdent(column))
-        .join(", ")}) VALUES ${tuples.join(", ")}`;
-
-      await pool.query(query, values);
+        await pool.query(query, values);
+      }
       console.log(`${table}: ${rows.length} rows`);
     }
 

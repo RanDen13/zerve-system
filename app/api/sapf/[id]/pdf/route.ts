@@ -1,7 +1,9 @@
 import { normalizeSapfRequest } from "@/app/components/pages/SAPF/sapfData";
+import { auth } from "@/lib/auth";
 import { getAppUrl } from "@/lib/deployment";
 import { prisma } from "@/lib/prisma";
 import { renderSapfPdf } from "@/lib/sapf-pdf";
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -10,9 +12,52 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session?.user) {
+    return NextResponse.json(
+      { message: "Unauthorized access." },
+      { status: 401 },
+    );
+  }
+
+  const role = session.user.role?.toUpperCase();
+  const allowedRoles = [
+    "OFFICER",
+    "APPROVER",
+    "ADMIN",
+    "SUPER_ADMIN",
+    "EQUIPMENT_PROVISIONER",
+  ];
+
+  if (!role || !allowedRoles.includes(role)) {
+    return NextResponse.json(
+      { message: "Your account role is not valid." },
+      { status: 403 },
+    );
+  }
+
   const { id } = await params;
-  const sapf = await prisma.sAPFRequest.findUnique({
-    where: { id },
+  const canSeeAllRequests = ["ADMIN", "SUPER_ADMIN"].includes(role);
+  const requestWhere = canSeeAllRequests
+    ? { id, status: "APPROVED" as const }
+    : role === "OFFICER"
+      ? { id, status: "APPROVED" as const, officerId: session.user.id }
+      : role === "EQUIPMENT_PROVISIONER"
+        ? { id, status: "APPROVED" as const, equipmentRequests: { some: {} } }
+        : {
+            id,
+            status: "APPROVED" as const,
+            OR: [
+              { approvalSteps: { some: { reviewerId: session.user.id } } },
+              { approvalActions: { some: { actorId: session.user.id } } },
+            ],
+          };
+
+  const sapf = await prisma.sAPFRequest.findFirst({
+    where: requestWhere,
     include: {
       officer: true,
       venues: { include: { eventSpace: true }, orderBy: { createdAt: "asc" } },
@@ -53,7 +98,7 @@ export async function GET(
     },
   });
 
-  if (!sapf || sapf.status !== "APPROVED" || !sapf.verificationToken) {
+  if (!sapf || !sapf.verificationToken) {
     return NextResponse.json(
       { message: "Approved reservation not found." },
       { status: 404 },

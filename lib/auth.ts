@@ -62,13 +62,25 @@ function readLoginLock(value?: string | null) {
 
 async function checkLoginLock(email: string) {
   const identifier = loginLockIdentifier(email);
-  const record = await prisma.verification.findFirst({
+  const records = await prisma.verification.findMany({
     where: { identifier },
+    orderBy: { expiresAt: "desc" },
   });
 
-  if (!record) return;
+  if (records.length === 0) return;
 
-  const lock = readLoginLock(record.value);
+  const lock = records
+    .map((record) => readLoginLock(record.value))
+    .reduce(
+      (strongest, next) => {
+        const strongestLock = strongest.lockedUntil?.getTime() ?? 0;
+        const nextLock = next.lockedUntil?.getTime() ?? 0;
+        return nextLock > strongestLock || next.count > strongest.count
+          ? next
+          : strongest;
+      },
+      { count: 0, lockedUntil: null as Date | null },
+    );
   const now = new Date();
   if (lock.lockedUntil && lock.lockedUntil > now) {
     const seconds = Math.max(
@@ -92,10 +104,16 @@ async function clearLoginLock(email: string) {
 
 async function recordFailedLogin(email: string) {
   const identifier = loginLockIdentifier(email);
-  const existing = await prisma.verification.findFirst({
+  const existing = await prisma.verification.findMany({
     where: { identifier },
+    orderBy: { expiresAt: "desc" },
   });
-  const lock = readLoginLock(existing?.value);
+  const lock = existing
+    .map((record) => readLoginLock(record.value))
+    .reduce(
+      (strongest, next) => (next.count > strongest.count ? next : strongest),
+      { count: 0, lockedUntil: null as Date | null },
+    );
   const count = lock.count + 1;
   const now = new Date();
   const lockedUntil =
@@ -109,21 +127,24 @@ async function recordFailedLogin(email: string) {
     lockedUntil: lockedUntil?.toISOString() ?? null,
   });
 
-  if (existing) {
-    await prisma.verification.update({
-      where: { id: existing.id },
-      data: { value, expiresAt },
+  await prisma.$transaction(async (tx) => {
+    await tx.verification.deleteMany({
+      where: {
+        identifier,
+        id: { not: identifier },
+      },
     });
-  } else {
-    await prisma.verification.create({
-      data: {
-        id: `${identifier}:${Date.now()}`,
+    await tx.verification.upsert({
+      where: { id: identifier },
+      update: { identifier, value, expiresAt },
+      create: {
+        id: identifier,
         identifier,
         value,
         expiresAt,
       },
     });
-  }
+  });
 
   if (lockedUntil) {
     throw APIError.from("TOO_MANY_REQUESTS", {
