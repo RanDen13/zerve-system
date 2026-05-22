@@ -109,7 +109,7 @@ async function main() {
   );
 
   const mockSds = await createAccount(
-    "mock.sds@email.lcup.edu.ph",
+    "iori.cu1316+sds@gmail.com",
     "SDS_Mock123",
     "Mock SDS Admin",
     "ADMIN",
@@ -117,7 +117,7 @@ async function main() {
   );
 
   const mockAdviser = await createAccount(
-    "mock.adviser@email.lcup.edu.ph",
+    "iori.cu1316+adviser@gmail.com",
     "Adviser123",
     "Mock Adviser",
     "APPROVER",
@@ -125,7 +125,7 @@ async function main() {
   );
 
   const mockDean = await createAccount(
-    "mock.dean@email.lcup.edu.ph",
+    "iori.cu1316+dean@gmail.com",
     "Dean123",
     "Mock Dean",
     "APPROVER",
@@ -133,7 +133,7 @@ async function main() {
   );
 
   await createAccount(
-    "mock.officer@email.lcup.edu.ph",
+    "iori.cu1316+officer@gmail.com",
     "Officer123",
     "Mock Officer",
     "OFFICER",
@@ -142,49 +142,49 @@ async function main() {
 
   const seededApprovers = await Promise.all([
     createAccount(
-      "mock.sas@email.lcup.edu.ph",
+      "iori.cu1316+sas@gmail.com",
       "SAS_Mock123",
       "Mock SAS Approver",
       "APPROVER",
       "Student Affairs Services Director",
     ),
     createAccount(
-      "mock.vpaa.asst@email.lcup.edu.ph",
+      "iori.cu1316+vpaa.asst@gmail.com",
       "VPAA_Asst123",
       "Mock VPAA Assistant",
       "APPROVER",
       "Vice President for Academic Affairs Assistant",
     ),
     createAccount(
-      "mock.vpaa@email.lcup.edu.ph",
+      "iori.cu1316+vpaa@gmail.com",
       "VPAA_Mock123",
       "Mock VPAA",
       "APPROVER",
       "Vice President for Academic Affairs",
     ),
     createAccount(
-      "mock.president@email.lcup.edu.ph",
+      "iori.cu1316+president@gmail.com",
       "President123",
       "Mock University President",
       "APPROVER",
       "University President",
     ),
     createAccount(
-      "mock.vp.finance@email.lcup.edu.ph",
+      "iori.cu1316+vp.finance@gmail.com",
       "VPFinance123",
       "Mock Additional Signatory 1",
       "APPROVER",
       "Vice President for Finance and Administration",
     ),
     createAccount(
-      "mock.vp.research@email.lcup.edu.ph",
+      "iori.cu1316+vp.research@gmail.com",
       "VPResearch123",
       "Mock Additional Signatory 2",
       "APPROVER",
       "Vice President Research and Innovation",
     ),
     createAccount(
-      "mock.vp.spiritual@email.lcup.edu.ph",
+      "iori.cu1316+vp.spiritual@gmail.com",
       "VPSpiritual123",
       "Mock Additional Signatory 3",
       "APPROVER",
@@ -359,24 +359,24 @@ async function main() {
     "Super admin: ryanphilippeiori.cu@email.lcup.edu.ph / Super_Admin123",
   );
   console.log("Mock approver accounts:");
-  console.log("SDS/Admin: mock.sds@email.lcup.edu.ph / SDS_Mock123");
-  console.log("Adviser: mock.adviser@email.lcup.edu.ph / Adviser123");
-  console.log("Dean: mock.dean@email.lcup.edu.ph / Dean123");
-  console.log("SAS: mock.sas@email.lcup.edu.ph / SAS_Mock123");
-  console.log("VPAA Assistant: mock.vpaa.asst@email.lcup.edu.ph / VPAA_Asst123");
-  console.log("VPAA: mock.vpaa@email.lcup.edu.ph / VPAA_Mock123");
-  console.log("University President: mock.president@email.lcup.edu.ph / President123");
+  console.log("SDS/Admin: iori.cu1316+sds@gmail.com / SDS_Mock123");
+  console.log("Adviser: iori.cu1316+adviser@gmail.com / Adviser123");
+  console.log("Dean: iori.cu1316+dean@gmail.com / Dean123");
+  console.log("SAS: iori.cu1316+sas@gmail.com / SAS_Mock123");
+  console.log("VPAA Assistant: iori.cu1316+vpaa.asst@gmail.com / VPAA_Asst123");
+  console.log("VPAA: iori.cu1316+vpaa@gmail.com / VPAA_Mock123");
+  console.log("University President: iori.cu1316+president@gmail.com / President123");
   console.log(
-    "Additional Signatory 1: mock.vp.finance@email.lcup.edu.ph / VPFinance123",
+    "Additional Signatory 1: iori.cu1316+vp.finance@gmail.com / VPFinance123",
   );
   console.log(
-    "Additional Signatory 2: mock.vp.research@email.lcup.edu.ph / VPResearch123",
+    "Additional Signatory 2: iori.cu1316+vp.research@gmail.com / VPResearch123",
   );
   console.log(
-    "Additional Signatory 3: mock.vp.spiritual@email.lcup.edu.ph / VPSpiritual123",
+    "Additional Signatory 3: iori.cu1316+vp.spiritual@gmail.com / VPSpiritual123",
   );
   console.log("Mock officer account:");
-  console.log("Officer: mock.officer@email.lcup.edu.ph / Officer123");
+  console.log("Officer: iori.cu1316+officer@gmail.com / Officer123");
 }
 
 main()
