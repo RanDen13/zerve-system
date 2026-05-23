@@ -907,6 +907,8 @@ function ReviewControls({
   const [reasonTag, setReasonTag] = useState("OTHER");
   const [routePosition, setRoutePosition] = useState("");
   const [routeReviewerId, setRouteReviewerId] = useState("");
+  const [additionalSignatoryReviewerIds, setAdditionalSignatoryReviewerIds] =
+    useState<string[]>([]);
   const [routeSuggestionPosition, setRouteSuggestionPosition] = useState("");
   const [adviserHandoff, setAdviserHandoff] = useState<"SDS" | "DEAN">("SDS");
   const [adviserHandoffReviewerId, setAdviserHandoffReviewerId] = useState("");
@@ -938,6 +940,7 @@ function ReviewControls({
       setAttachmentInputKey((key) => key + 1);
       setRoutePosition("");
       setRouteReviewerId("");
+      setAdditionalSignatoryReviewerIds([]);
       setRouteSuggestionPosition("");
       setAdviserHandoff("SDS");
       setAdviserHandoffReviewerId("");
@@ -958,7 +961,16 @@ function ReviewControls({
   const routeReviewerOptions = routePosition ? approvers?.[routePosition] || [] : [];
   const routeReviewerValue =
     routeReviewerId || (routeReviewerOptions.length === 1 ? routeReviewerOptions[0].id : "");
-  const routeReviewerRequired = routeReviewerOptions.length > 1;
+  const additionalSignatoryOptions = approvers?.ADDITIONAL_SIGNATORY || [];
+  const showAdditionalSignatoryChoices =
+    selectedAction === "route" &&
+    ["SAS", "VPAA_ASSISTANT", "ADDITIONAL_SIGNATORY"].includes(routePosition);
+  const routeReviewerRequired =
+    routeReviewerOptions.length > 1 &&
+    !(
+      routePosition === "ADDITIONAL_SIGNATORY" &&
+      additionalSignatoryReviewerIds.length > 0
+    );
   const deanReviewerOptions = approvers?.DEAN || [];
   const adviserHandoffReviewerValue =
     adviserHandoffReviewerId ||
@@ -988,7 +1000,19 @@ function ReviewControls({
   const missingRouteOptions =
     selectedAction === "route" &&
     Boolean(routePosition) &&
-    routeReviewerOptions.length === 0;
+    routeReviewerOptions.length === 0 &&
+    !(
+      routePosition === "ADDITIONAL_SIGNATORY" &&
+      additionalSignatoryReviewerIds.length > 0
+    );
+  const nextPendingStep = [...(request.approvalSteps || [])]
+    .filter(
+      (item: any) =>
+        item.status === "PENDING" &&
+        item.stepOrder > step.stepOrder &&
+        item.position !== "SDS",
+    )
+    .sort((a: any, b: any) => a.stepOrder - b.stepOrder)[0];
   const selectedActionLabel =
     selectedAction === "approve"
       ? isSdsStep || isPresidentFinalStep
@@ -1007,6 +1031,8 @@ function ReviewControls({
         ? "Approve adviser review, then choose Dean review or direct SDS handoff."
         : isSdsStep || isPresidentFinalStep
         ? "This completes the reservation approval and locks the slot."
+        : nextPendingStep
+        ? `Approve your review and continue to ${nextPendingStep.label}.`
         : "Approve your review and send the request to SDS for routing."
       : selectedAction === "route"
         ? "SDS can send this request to another reviewer or to the President for final approval."
@@ -1043,6 +1069,8 @@ function ReviewControls({
         : "SDS routing decision"
       : isSdsStep || isPresidentFinalStep
       ? "Final approval"
+      : nextPendingStep
+      ? nextPendingStep.label
       : "SDS routing decision";
 
   const yesNoField = (name: string, label: string) => (
@@ -1219,6 +1247,7 @@ function ReviewControls({
             setReasonTag("OTHER");
             setRoutePosition("");
             setRouteReviewerId("");
+            setAdditionalSignatoryReviewerIds([]);
             setRouteSuggestionPosition("");
             setAdviserHandoff("SDS");
             setAdviserHandoffReviewerId("");
@@ -1242,6 +1271,7 @@ function ReviewControls({
                 setReasonTag("OTHER");
                 setRoutePosition("");
                 setRouteReviewerId("");
+                setAdditionalSignatoryReviewerIds([]);
                 setAdviserHandoff("SDS");
                 setAdviserHandoffReviewerId("");
                 setReturnTarget("OFFICER");
@@ -1262,6 +1292,7 @@ function ReviewControls({
                 setReasonTag("OTHER");
                 setRoutePosition("UNIVERSITY_PRESIDENT");
                 setRouteReviewerId("");
+                setAdditionalSignatoryReviewerIds([]);
                 setAdviserHandoff("SDS");
                 setAdviserHandoffReviewerId("");
                 setReturnTarget("OFFICER");
@@ -1284,6 +1315,7 @@ function ReviewControls({
             setReasonTag("OTHER");
             setRoutePosition("");
             setRouteReviewerId("");
+            setAdditionalSignatoryReviewerIds([]);
             setRouteSuggestionPosition("");
             setAdviserHandoff("SDS");
             setAdviserHandoffReviewerId("");
@@ -1305,6 +1337,7 @@ function ReviewControls({
             setReasonTag("OTHER");
             setRoutePosition("");
             setRouteReviewerId("");
+            setAdditionalSignatoryReviewerIds([]);
             setRouteSuggestionPosition("");
             setAdviserHandoff("SDS");
             setAdviserHandoffReviewerId("");
@@ -1508,6 +1541,7 @@ function ReviewControls({
                           onValueChange={(value) => {
                             setRoutePosition(value);
                             setRouteReviewerId("");
+                            setAdditionalSignatoryReviewerIds([]);
                           }}
                           required
                         >
@@ -1570,6 +1604,58 @@ function ReviewControls({
                         ) : null}
                       </div>
                     </div>
+                    {showAdditionalSignatoryChoices && (
+                      <div className="mt-4 rounded-md border bg-background p-3">
+                        <p className="text-sm font-semibold text-foreground">
+                          Additional signatories
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {routePosition === "ADDITIONAL_SIGNATORY"
+                            ? "Selected signatories will review before VPAA."
+                            : "Selected signatories will review after VPAA Assistant and before VPAA."}
+                        </p>
+                        <div className="mt-3 grid gap-2">
+                          {additionalSignatoryOptions.map((reviewer: any) => (
+                            <label
+                              key={reviewer.id}
+                              className="flex items-start gap-2 rounded-md border bg-card p-2 text-sm"
+                            >
+                              <input
+                                type="checkbox"
+                                name="additionalSignatoryReviewerIds"
+                                value={reviewer.id}
+                                checked={additionalSignatoryReviewerIds.includes(
+                                  reviewer.id,
+                                )}
+                                onChange={(event) => {
+                                  setAdditionalSignatoryReviewerIds((ids) =>
+                                    event.target.checked
+                                      ? [...ids, reviewer.id]
+                                      : ids.filter((id) => id !== reviewer.id),
+                                  );
+                                }}
+                                className="mt-1 h-4 w-4 accent-primary"
+                              />
+                              <span className="grid gap-0.5">
+                                <span className="font-medium text-foreground">
+                                  {reviewer.name}
+                                </span>
+                                {reviewer.title && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {reviewer.title}
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          ))}
+                          {additionalSignatoryOptions.length === 0 && (
+                            <p className="text-xs text-destructive">
+                              No active additional signatory accounts are configured.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {selectedAction === "return" && (
